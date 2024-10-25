@@ -259,7 +259,9 @@ The followings are the default values in the config file.
 
     * Shopping ads will still be opened on browser.
 
-        <video src="assets/send_to_android_recording.mp4"></video>
+    * Watch an example run
+
+        [![Send to Android](assets/send_to_android_cover.png)](https://youtu.be/XrZeECSXASg)
 
 <br>
 
