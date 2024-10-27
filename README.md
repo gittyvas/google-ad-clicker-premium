@@ -257,8 +257,6 @@ The followings are the default values in the config file.
         4. Connect ADB to your phone wirelessly.
             * `adb connect <phone_ip>:5555`
 
-    * Shopping ads will still be opened on browser.
-
     * Watch an example run
 
         [![Send to Android](assets/send_to_android_cover.png)](https://youtu.be/XrZeECSXASg)

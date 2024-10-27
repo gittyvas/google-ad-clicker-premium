@@ -26,7 +26,7 @@ from clicklogs_db import ClickLogsDB
 from config_reader import config
 from logger import logger
 from stats import SearchStats
-from utils import Direction, add_cookies, solve_recaptcha, get_random_sleep
+from utils import Direction, add_cookies, solve_recaptcha, get_random_sleep, resolve_redirect
 
 
 LinkElement = selenium.webdriver.remote.webelement.WebElement
@@ -222,9 +222,12 @@ class SearchController:
                 if self._hooks_enabled:
                     hooks.before_ad_click_hook(self._driver)
 
-                self._handle_browser_click(
-                    ad_link_element, ad_link, True, original_window_handle, category="Shopping"
-                )
+                if config.behavior.send_to_android and self._android_device_id:
+                    self._handle_android_click(ad_link_element, ad_link, True, category="Shopping")
+                else:
+                    self._handle_browser_click(
+                        ad_link_element, ad_link, True, original_window_handle, category="Shopping"
+                    )
 
             except Exception:
                 logger.debug(f"Failed to click ad element [{ad_title}]!")
@@ -280,6 +283,8 @@ class SearchController:
         :param link: (ad, ad_link, ad_title) for ads LinkElement for non-ads
         :type is_ad_element: bool
         :param is_ad_element: Whether it is an ad or non-ad link
+        :rtype: tuple
+        :returns: (link_element, link_url, ad_title) tuple
         """
 
         if is_ad_element:
@@ -313,6 +318,8 @@ class SearchController:
         """
 
         url = link_url if category == "Shopping" else link_element.get_attribute("href")
+
+        url = resolve_redirect(url)
 
         adb_controller.open_url(url, self._android_device_id)
 

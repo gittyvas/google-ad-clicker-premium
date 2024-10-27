@@ -52,11 +52,12 @@ class ADBController:
                 "shell",
                 "am",
                 "start",
+                "-n",
+                "com.android.chrome/com.google.android.apps.chrome.Main",
                 "-a",
                 "android.intent.action.VIEW",
                 "-d",
                 url,
-                "com.android.chrome",
             ]
             result = subprocess.run(command, capture_output=True, text=True)
 

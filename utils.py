@@ -606,3 +606,21 @@ def get_locale_language(country_code: str) -> str:
     logger.debug(f"Locale language code for {country_code}: {locale_language[0]}")
 
     return locale_language
+
+
+def resolve_redirect(url: str) -> str:
+    """Resolve any redirects and return the final destination URL
+
+    :type url: str
+    :param url: Input url to resolve
+    :rtype: str
+    :returns: Final destination URL
+    """
+
+    try:
+        response = requests.get(url, allow_redirects=True)
+        return response.url
+
+    except requests.RequestException as exp:
+        logger.error(f"Error resolving URL redirection: {exp}")
+        return url
