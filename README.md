@@ -4,28 +4,28 @@ This command-line tool clicks ads for a certain query on Google search using [un
 
 * Additional Features in Premium
 
-    * Single config file for all options
-    * Desktop UI for configuration and run
-    * Clear cache and cookies on browser exit
-    * External file for user agents
-    * Set browser window size
-    * Shift browser windows by random offsets
-    * Set opening URL based on the proxy country
-    * Set browser language based on the proxy country
-    * Random scrolls and mouse movements on pages
-    * Click non-ad links with domain filtering or in random
-    * Custom click order between ad and non-ad links
-    * Set min/max waiting range for ad and non-ad pages
-    * Limit max scroll on the search results page
-    * Use custom collected cookies
-    * Set the running interval time
-    * Summary of statistics
-    * Click on the top shopping ads up to 5
-    * 2captcha integration
-    * Telegram notification
-    * Generate daily click report
-    * Open found links on Android device
-    * Hooks for extending the tool with custom behavior
+    * 🛠️ Single config file for all options
+    * 🖥️ Desktop UI for configuration and run
+    * 🗑️ Clear cache and cookies on browser exit
+    * 📄 External file for user agents
+    * 🖼️ Set browser window size
+    * 🎲 Shift browser windows by random offsets
+    * 🌍 Set opening URL based on the proxy country
+    * 🈵 Set browser language based on the proxy country
+    * 🖱️ Random scrolls and mouse movements on pages
+    * 🔗 Click non-ad links with domain filtering or in random
+    * 🔄 Custom click order between ad and non-ad links
+    * ⏱️ Set min/max waiting range for ad and non-ad pages
+    * 📜 Limit max scroll on the search results page
+    * 🍪 Use custom collected cookies
+    * ⏳ Set the running interval time
+    * 📊 Summary of statistics
+    * 🛍️ Click on the top shopping ads up to 5
+    * 🔐 2captcha integration
+    * 📨 Telegram notification
+    * 📝 Generate daily click report
+    * 📱 Open found links on Android device
+    * 🪝 Hooks for extending the tool with custom behavior
 
 <br>
 
