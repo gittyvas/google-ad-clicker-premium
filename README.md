@@ -26,6 +26,9 @@ This command-line tool clicks ads for a certain query on Google search using [un
     * 📝 Generate daily click report
     * 📱 Open found links on Android device
     * 🪝 Hooks for extending the tool with custom behavior
+    * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://youtu.be/F0R1NeEF-EM))
+
+        ![click report](assets/dashboard.png)
 
 <br>
 
