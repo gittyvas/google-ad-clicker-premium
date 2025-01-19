@@ -123,7 +123,7 @@ class SearchController:
         self._close_cookie_dialog()
 
         logger.info(f"Starting search for '{self._search_query}'")
-        sleep(get_random_sleep(1, 2))
+        sleep(get_random_sleep(1, 2) * config.behavior.wait_factor)
 
         try:
             search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
@@ -157,7 +157,7 @@ class SearchController:
         self._check_captcha()
 
         # wait 2 to 3 seconds before checking if results were loaded
-        sleep(get_random_sleep(2, 3))
+        sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
 
         if not self._driver.find_elements(*self.RESULTS_CONTAINER):
             self._close_cookie_dialog()
@@ -167,7 +167,7 @@ class SearchController:
 
             # sleep after entering search keyword by randomly selected amount
             # between 2 to 3 seconds
-            sleep(get_random_sleep(2, 3))
+            sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
 
         if self._hooks_enabled:
             hooks.after_query_sent_hook(self._driver, self._search_query)
@@ -327,7 +327,7 @@ class SearchController:
         click_time = datetime.now().strftime("%H:%M:%S")
 
         # wait a little before starting random actions
-        sleep(get_random_sleep(2, 3))
+        sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
 
         logger.debug(f"Current url on device: {url}")
 
@@ -344,12 +344,12 @@ class SearchController:
 
         self._update_click_stats(site_url, click_time, category)
 
-        wait_time = self._get_wait_time(is_ad_element)
+        wait_time = self._get_wait_time(is_ad_element) * config.behavior.wait_factor
         logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
         sleep(wait_time)
 
         adb_controller.close_browser()
-        sleep(get_random_sleep(0.5, 1))
+        sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
 
     def _handle_browser_click(
         self,
@@ -391,7 +391,7 @@ class SearchController:
                 self._driver.switch_to.window(window_handle)
                 click_time = datetime.now().strftime("%H:%M:%S")
 
-                sleep(get_random_sleep(3, 5))
+                sleep(get_random_sleep(3, 5) * config.behavior.wait_factor)
                 logger.debug(f"Current url on new tab: {self._driver.current_url}")
 
                 if self._hooks_enabled and category in ("Ad", "Shopping"):
@@ -407,7 +407,7 @@ class SearchController:
 
                 self._update_click_stats(url, click_time, category)
 
-                wait_time = self._get_wait_time(is_ad_element)
+                wait_time = self._get_wait_time(is_ad_element) * config.behavior.wait_factor
                 logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
                 sleep(wait_time)
 
@@ -416,7 +416,7 @@ class SearchController:
 
         # go back to the original window
         self._driver.switch_to.window(original_window_handle)
-        sleep(get_random_sleep(1, 1.5))
+        sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
 
     def _open_link_in_new_tab(
         self, link_element: selenium.webdriver.remote.webelement.WebElement
@@ -438,7 +438,7 @@ class SearchController:
             actions.key_up(control_command_key)
             actions.perform()
 
-            sleep(get_random_sleep(0.5, 1))
+            sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
 
         except JavascriptException as exp:
             error_message = str(exp).split("\n")[0]
@@ -675,7 +675,7 @@ class SearchController:
                     break
 
             self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
-            sleep(get_random_sleep(2, 2.5))
+            sleep(get_random_sleep(2, 2.5) * config.behavior.wait_factor)
 
             scroll_count += 1
 
@@ -818,7 +818,7 @@ class SearchController:
 
         logger.debug("Waiting for cookie dialog...")
 
-        sleep(get_random_sleep(3, 3.5))
+        sleep(get_random_sleep(3, 3.5) * config.behavior.wait_factor)
 
         all_links = [
             element.get_attribute("href")
@@ -842,9 +842,9 @@ class SearchController:
                             self._driver.execute_script(
                                 "arguments[0].scrollIntoView(true);", button
                             )
-                            sleep(get_random_sleep(0.5, 1))
+                            sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
                             button.click()
-                            sleep(get_random_sleep(1, 1.5))
+                            sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
 
                             try:
                                 search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
@@ -864,7 +864,7 @@ class SearchController:
                     ):
                         pass
 
-                sleep(get_random_sleep(1, 1.5))
+                sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
                 break
         else:
             logger.debug("No cookie dialog found! Continue with search...")
@@ -933,7 +933,7 @@ class SearchController:
             elif direction == Direction.UP:
                 self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
 
-            sleep(get_random_sleep(1, 3))
+            sleep(get_random_sleep(1, 3) * config.behavior.wait_factor)
 
         self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
 
@@ -956,7 +956,7 @@ class SearchController:
             elif direction == Direction.UP:
                 self._send_swipe(direction=Direction.UP)
 
-            sleep(get_random_sleep(1, 2))
+            sleep(get_random_sleep(1, 2) * config.behavior.wait_factor)
 
         HOME_KEYCODE = 122
         adb_controller.send_keyevent(HOME_KEYCODE)  # go to top by sending Home key
@@ -1059,7 +1059,7 @@ class SearchController:
     def _check_captcha(self) -> None:
         """Check if captcha exists and solve it if 2captcha is used, otherwise exit"""
 
-        sleep(get_random_sleep(2, 2.5))
+        sleep(get_random_sleep(2, 2.5) * config.behavior.wait_factor)
 
         try:
             captcha = self._driver.find_element(*self.RECAPTCHA)
@@ -1106,7 +1106,7 @@ class SearchController:
                     )
                     self._driver.get(captcha_redirect_url)
 
-                    sleep(get_random_sleep(2, 2.5))
+                    sleep(get_random_sleep(2, 2.5) * config.behavior.wait_factor)
 
                 else:
                     logger.info("Please try with a different proxy.")
@@ -1128,18 +1128,18 @@ class SearchController:
             logger.debug("Closing location choose dialog...")
             estimated_loc_img.click()
 
-            sleep(get_random_sleep(1, 1.5))
+            sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
 
             continue_button = self._driver.find_element(*self.LOC_CONTINUE_BUTTON)
             logger.debug(continue_button.get_attribute("outerHTML"))
 
             continue_button.click()
 
-            sleep(get_random_sleep(0.1, 0.5))
+            sleep(get_random_sleep(0.1, 0.5) * config.behavior.wait_factor)
 
         except NoSuchElementException:
 
-            sleep(get_random_sleep(1, 1.5))
+            sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
 
             try:
                 logger.debug("Checking alternative location dialog...")
@@ -1150,7 +1150,7 @@ class SearchController:
 
                 not_now_button.click()
 
-                sleep(get_random_sleep(0.2, 0.5))
+                sleep(get_random_sleep(0.2, 0.5) * config.behavior.wait_factor)
 
             except NoSuchElementException:
                 logger.debug("No location choose dialog seen. Continue to search...")

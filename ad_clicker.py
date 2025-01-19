@@ -147,7 +147,7 @@ def main():
         from time import sleep
 
         driver.get("https://nowsecure.nl/")
-        sleep(7)
+        sleep(7 * config.behavior.wait_factor)
 
         driver.quit()
 
