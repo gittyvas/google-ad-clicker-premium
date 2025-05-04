@@ -24,6 +24,7 @@ class WebdriverParams:
     ss_on_exception: Optional[bool] = False
     window_size: Optional[str] = ""
     shift_windows: Optional[bool] = False
+    use_seleniumbase: Optional[bool] = False
 
 
 @dataclass
@@ -89,6 +90,7 @@ class ConfigReader:
             ss_on_exception=config["webdriver"]["ss_on_exception"],
             window_size=config["webdriver"]["window_size"],
             shift_windows=config["webdriver"]["shift_windows"],
+            use_seleniumbase=config["webdriver"]["use_seleniumbase"],
         )
 
         if self.paths.query_file and config["behavior"]["query"]:

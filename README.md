@@ -1,6 +1,6 @@
 # Ad Clicker Premium for Google
 
-This command-line tool clicks ads for a certain query on Google search using [undetected_chromedriver](https://github.com/ultrafunkamsterdam/undetected-chromedriver) package. Supports proxy, running multiple simultaneous browsers, ad targeting/exclusion, and running in loop.
+This command-line tool clicks ads for a certain query on Google search using [undetected_chromedriver](https://github.com/ultrafunkamsterdam/undetected-chromedriver) or [SeleniumBase](https://github.com/seleniumbase/SeleniumBase) packages. Supports proxy, running multiple simultaneous browsers, ad targeting/exclusion, and running in loop.
 
 * Additional Features in Premium
 
@@ -102,7 +102,8 @@ The followings are the default values in the config file.
         "language_from_proxy": false,
         "ss_on_exception": false,
         "window_size": "",
-        "shift_windows": false
+        "shift_windows": false,
+        "use_seleniumbase": false
     },
     "behavior": {
         "query": "",
@@ -155,6 +156,8 @@ The followings are the default values in the config file.
 * **shift_windows**: Shift browser windows by randomly selected x,y offsets.
     * If you are using a display zoom other than 100%, use this together with `window_size` option.
     * If a custom `window_size` is given, it is used to determine a new widthxheight for the window. Otherwise, screen resolution is used.
+
+* **use_seleniumbase**: Use SeleniumBase with UC mode instead of undetected_chromedriver.
 
 * **query**: Search query. The `query_file` and `query` parameters can not have a value at the same time.
     * A query like "wireless speaker@amazon#ebay  # mediamarkt" searches for "wireless speaker" and click links that include the given filter words in url or title.

@@ -139,7 +139,7 @@ class WebdriverFrame(customtkinter.CTkFrame):
         self._country_domain_value = self._add_checkbox(
             row=4, column=0, label="Country Domain", enabled=config.webdriver.country_domain
         )
-        self._language_from_proxy = self._add_checkbox(
+        self._language_from_proxy_value = self._add_checkbox(
             row=4,
             column=1,
             label="Language From Proxy",
@@ -147,6 +147,12 @@ class WebdriverFrame(customtkinter.CTkFrame):
         )
         self._ss_on_exception_value = self._add_checkbox(
             row=4, column=2, label="SS on Exception", enabled=config.webdriver.ss_on_exception
+        )
+        self._use_seleniumbase_value = self._add_checkbox(
+            row=5,
+            column=1,
+            label="Use SeleniumBase with UC Mode",
+            enabled=config.webdriver.use_seleniumbase,
         )
 
     def get_webdriver_config(self) -> dict[str, str]:
@@ -161,10 +167,11 @@ class WebdriverFrame(customtkinter.CTkFrame):
             "auth": self._auth_value.get(),
             "incognito": self._incognito_value.get(),
             "country_domain": self._country_domain_value.get(),
-            "language_from_proxy": self._language_from_proxy.get(),
+            "language_from_proxy": self._language_from_proxy_value.get(),
             "ss_on_exception": self._ss_on_exception_value.get(),
             "window_size": self._window_size_input.get("1.0", "end-1c"),
             "shift_windows": self._shift_windows_value.get(),
+            "use_seleniumbase": self._use_seleniumbase_value.get(),
         }
 
     def _add_input_field(

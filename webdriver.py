@@ -4,11 +4,12 @@ import shutil
 import sys
 from pathlib import Path
 from time import sleep
-from typing import Optional
+from typing import Optional, Union
 
 try:
     import pyautogui
     import requests
+    import seleniumbase
     import undetected_chromedriver
 
 except ImportError:
@@ -17,6 +18,7 @@ except ImportError:
 
     import pyautogui
     import requests
+    import seleniumbase
     import undetected_chromedriver
 
 from config_reader import config
@@ -132,28 +134,37 @@ def create_webdriver(
     :returns: (undetected_chromedriver.Chrome, country_code) pair
     """
 
+    if config.webdriver.use_seleniumbase:
+        logger.debug("Using SeleniumBase...")
+        return create_seleniumbase_driver(proxy, user_agent)
+
     geolocation_db_client = GeolocationDB()
 
     chrome_options = undetected_chromedriver.ChromeOptions()
-    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-service-autorun")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-infobars")
     chrome_options.add_argument("--disable-popup-blocking")
     chrome_options.add_argument("--disable-notifications")
-    chrome_options.add_argument("--ignore-ssl-errors")
-    chrome_options.add_argument("--ignore-certificate-errors")
     chrome_options.add_argument("--disable-translate")
     chrome_options.add_argument("--deny-permission-prompts")
-    chrome_options.add_argument("--no-first-run")
-    chrome_options.add_argument("--no-service-autorun")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_argument("--disable-cache")
     chrome_options.add_argument("--disable-application-cache")
-    chrome_options.add_argument("--media-cache-size=0")
-    chrome_options.add_argument("--disk-cache-size=0")
     chrome_options.add_argument("--disable-breakpad")
     chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--disable-browser-side-navigation")
+    chrome_options.add_argument("--disable-save-password-bubble")
+    chrome_options.add_argument("--disable-single-click-autofill")
+    chrome_options.add_argument("--disable-prompt-on-repost")
+    chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+    chrome_options.add_argument("--disable-hang-monitor")
+    chrome_options.add_argument("--dns-prefetch-disable")
     chrome_options.add_argument(f"--user-agent={user_agent}")
+
+    if IS_POSIX:
+        chrome_options.add_argument("--disable-setuid-sandbox")
 
     optimization_features = [
         "OptimizationGuideModelDownloading",
@@ -176,10 +187,6 @@ def create_webdriver(
 
     if config.webdriver.incognito:
         chrome_options.add_argument("--incognito")
-
-    if not config.webdriver.window_size:
-        logger.debug("Maximizing window...")
-        chrome_options.add_argument("--start-maximized")
 
     country_code = None
 
@@ -260,36 +267,143 @@ def create_webdriver(
         width, height = config.webdriver.window_size.split(",")
         logger.debug(f"Setting window size as {width}x{height} px")
         driver.set_window_size(width, height)
+    else:
+        logger.debug("Maximizing window...")
+        driver.maximize_window()
 
     if config.webdriver.shift_windows:
-        # get screen size
-        screen_width, screen_height = pyautogui.size()
-
-        window_position = driver.get_window_position()
-        x, y = window_position["x"], window_position["y"]
-
-        random_x_offset = random.choice(range(150, 300))
-        random_y_offset = random.choice(range(75, 150))
-
-        if config.webdriver.window_size:
-            new_width = int(width) - random_x_offset
-            new_height = int(height) - random_y_offset
-        else:
-            new_width = int(screen_width * 2 / 3) - random_x_offset
-            new_height = int(screen_height * 2 / 3) - random_y_offset
-
-        # set the window size and position
-        driver.set_window_size(new_width, new_height)
-
-        new_x = min(x + random_x_offset, screen_width - new_width)
-        new_y = min(y + random_y_offset, screen_height - new_height)
-
-        logger.debug(f"Setting window position as ({new_x},{new_y})...")
-
-        driver.set_window_position(new_x, new_y)
-        sleep(get_random_sleep(0.1, 0.5) * config.behavior.wait_factor)
+        width, height = (
+            config.webdriver.window_size.split(",")
+            if config.webdriver.window_size
+            else (None, None)
+        )
+        _shift_window_position(driver, width, height)
 
     return (driver, country_code) if config.webdriver.country_domain else (driver, None)
+
+
+def create_seleniumbase_driver(
+    proxy: str, user_agent: Optional[str] = None
+) -> tuple[seleniumbase.Driver, Optional[str]]:
+    """Create SeleniumBase Chrome webdriver instance
+
+    :type proxy: str
+    :param proxy: Proxy to use in ip:port or user:pass@host:port format
+    :type user_agent: str
+    :param user_agent: User agent string
+    :rtype: tuple
+    :returns: (Driver, country_code) pair
+    """
+
+    geolocation_db_client = GeolocationDB()
+
+    country_code = None
+
+    if proxy:
+        logger.info(f"Using proxy: {proxy}")
+
+        if config.webdriver.auth:
+            if "@" not in proxy or proxy.count(":") != 2:
+                raise ValueError(
+                    "Invalid proxy format! Should be in 'username:password@host:port' format"
+                )
+
+        # get location of the proxy IP
+        lat, long, country_code, timezone = get_location(geolocation_db_client, proxy)
+
+        if config.webdriver.language_from_proxy:
+            lang = get_locale_language(country_code)
+
+    driver = seleniumbase.get_driver(
+        browser_name="chrome",
+        undetectable=True,
+        headless2=False,
+        do_not_track=True,
+        user_agent=user_agent,
+        proxy_string=proxy or None,
+        incognito=config.webdriver.incognito,
+        locale_code=str(lang) if config.webdriver.language_from_proxy else None,
+    )
+
+    # set geolocation and timezone if available
+    if proxy and lat and long:
+        accuracy = 95
+        driver.execute_cdp_cmd(
+            "Emulation.setGeolocationOverride",
+            {"latitude": lat, "longitude": long, "accuracy": accuracy},
+        )
+
+        if not timezone:
+            response = requests.get(f"http://timezonefinder.michelfe.it/api/0_{long}_{lat}")
+            if response.status_code == 200:
+                timezone = response.json()["tz_name"]
+
+        driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": timezone})
+        logger.debug(
+            f"Timezone of {proxy.split('@')[1] if config.webdriver.auth else proxy}: {timezone}"
+        )
+
+    # handle window size and position
+    if config.webdriver.window_size:
+        width, height = config.webdriver.window_size.split(",")
+        logger.debug(f"Setting window size as {width}x{height} px")
+        driver.set_window_size(int(width), int(height))
+    else:
+        logger.debug("Maximizing window...")
+        driver.maximize_window()
+
+    if config.webdriver.shift_windows:
+        width, height = (
+            config.webdriver.window_size.split(",")
+            if config.webdriver.window_size
+            else (None, None)
+        )
+        _shift_window_position(driver, width, height)
+
+    return (driver, country_code) if config.webdriver.country_domain else (driver, None)
+
+
+def _shift_window_position(
+    driver: Union[undetected_chromedriver.Chrome, seleniumbase.Driver],
+    width: int = None,
+    height: int = None,
+) -> None:
+    """Shift the browser window position randomly
+
+    :type driver: Union[undetected_chromedriver.Chrome, seleniumbase.Driver]
+    :param driver: WebDriver instance
+    :type width: int
+    :param width: Predefined window width
+    :type height: int
+    :param height: Predefined window height
+    """
+
+    # get screen size
+    screen_width, screen_height = pyautogui.size()
+
+    window_position = driver.get_window_position()
+    x, y = window_position["x"], window_position["y"]
+
+    random_x_offset = random.choice(range(150, 300))
+    random_y_offset = random.choice(range(75, 150))
+
+    if width and height:
+        new_width = int(width) - random_x_offset
+        new_height = int(height) - random_y_offset
+    else:
+        new_width = int(screen_width * 2 / 3) - random_x_offset
+        new_height = int(screen_height * 2 / 3) - random_y_offset
+
+    # set the window size and position
+    driver.set_window_size(new_width, new_height)
+
+    new_x = min(x + random_x_offset, screen_width - new_width)
+    new_y = min(y + random_y_offset, screen_height - new_height)
+
+    logger.debug(f"Setting window position as ({new_x},{new_y})...")
+
+    driver.set_window_position(new_x, new_y)
+    sleep(get_random_sleep(0.1, 0.5) * config.behavior.wait_factor)
 
 
 def _get_driver_exe_path() -> str:

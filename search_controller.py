@@ -127,7 +127,7 @@ class SearchController:
 
         try:
             search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-            search_input_box.send_keys(self._search_query, Keys.ENTER)
+            self._type_humanlike(search_input_box, self._search_query)
 
         except ElementNotInteractableException:
             self._check_captcha()
@@ -144,7 +144,7 @@ class SearchController:
 
                     try:
                         search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-                        search_input_box.send_keys(self._search_query, Keys.ENTER)
+                        self._type_humanlike(search_input_box, self._search_query)
                     except ElementNotInteractableException:
                         pass
 
@@ -163,7 +163,7 @@ class SearchController:
             self._close_cookie_dialog()
             logger.debug(f"Reentering search query '{self._search_query}'")
             search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-            search_input_box.send_keys(self._search_query, Keys.ENTER)
+            self._type_humanlike(search_input_box, self._search_query)
 
             # sleep after entering search keyword by randomly selected amount
             # between 2 to 3 seconds
@@ -527,7 +527,10 @@ class SearchController:
     def _load(self) -> None:
         """Load Google main page"""
 
-        self._driver.get(self.URL)
+        if config.webdriver.use_seleniumbase:
+            self._driver.uc_open_with_reconnect(self.URL, reconnect_time=3)
+        else:
+            self._driver.get(self.URL)
 
     def _get_shopping_ad_links(self) -> AdList:
         """Extract shopping ad links to click if exists
@@ -848,8 +851,7 @@ class SearchController:
 
                             try:
                                 search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-                                search_input_box.send_keys(self._search_query)
-                                search_input_box.clear()
+                                self._type_humanlike(search_input_box, self._search_query)
                                 break
                             except (
                                 ElementNotInteractableException,
@@ -1157,6 +1159,29 @@ class SearchController:
 
             except ElementNotInteractableException:
                 logger.debug("Location dialog button element is not interactable!")
+
+    def _type_humanlike(
+        self, element: selenium.webdriver.remote.webelement.WebElement, text: str
+    ) -> None:
+        """Type text slowly like a human
+
+        :type element: selenium.webdriver.remote.webelement.WebElement
+        :param element: Element to type into
+        :type text: str
+        :param text: Text to type
+        """
+
+        try:
+            element.clear()
+
+            for character in text:
+                element.send_keys(character)
+                sleep(get_random_sleep(0.05, 0.15) * config.behavior.wait_factor)
+
+            element.send_keys(Keys.ENTER)
+
+        except Exception as exp:
+            logger.debug(f"Error while typing: {exp}")
 
     def set_browser_id(self, browser_id: Optional[int] = None) -> None:
         """Set browser id in stats if multiple browsers are used
