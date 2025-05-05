@@ -26,6 +26,7 @@ This command-line tool clicks ads for a certain query on Google search using [un
     * 📝 Generate daily click report
     * 📱 Open found links on Android device
     * 🪝 Hooks for extending the tool with custom behavior
+    * 🚀 Request boost
     * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://vimeo.com/1072189164))
 
         ![click report](assets/dashboard.png)
@@ -126,7 +127,8 @@ The followings are the default values in the config file.
         "2captcha_apikey": "",
         "hooks_enabled": false,
         "telegram_enabled": false,
-        "send_to_android": false
+        "send_to_android": false,
+        "request_boost": false
     }
 }
 ```
@@ -272,6 +274,10 @@ The followings are the default values in the config file.
 
         [![Send to Android](assets/send_to_android_cover.png)](https://vimeo.com/1072189351)
 
+* **request_boost**: Send 10 parallel requests to the link clicked with different IPs in addition to the browser click.
+
+    * Note that this can cause bans due to number of requests sent in a short period.
+
 <br>
 
 ### Enable Telegram Notification
@@ -362,7 +368,7 @@ Apply the following steps for once to enable Telegram notifications.
 
 [https://coskundeniz.github.io/ad_clicker](https://coskundeniz.github.io/ad_clicker)
 
-If you benefit from this tool, please give a star and consider donating using the sponsor links([patreon](https://patreon.com/pythondoctor), [ko-fi](https://ko-fi.com/coskundeniz)) or the following crypto addresses.
+If you benefit from this tool, please give a star and consider donating using the sponsor links([patreon](https://patreon.com/ritimdarbuka), [ko-fi](https://ko-fi.com/coskundeniz)) or the following crypto addresses.
 
 * ETH: 0x461c1B3bd9c3E2d949C56670C088465Bf3457F4B
 * USDT: 0x1a4f06937100Dc704031386667D731Bea0670aaf

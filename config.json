@@ -37,6 +37,7 @@
         "2captcha_apikey": "",
         "hooks_enabled": false,
         "telegram_enabled": false,
-        "send_to_android": false
+        "send_to_android": false,
+        "request_boost": false
     }
 }

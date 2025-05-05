@@ -240,7 +240,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
     def __init__(self, master) -> None:
         super().__init__(master)
 
-        self.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        self.grid_columnconfigure((0, 1, 2, 3, 4, 5, 6), weight=1)
 
         self.relative_width = master.winfo_screenwidth() // 100
         self.relative_height = master.winfo_screenheight() // 100
@@ -248,14 +248,14 @@ class BehaviorFrame(customtkinter.CTkFrame):
         self._title = customtkinter.CTkLabel(
             self, text="BEHAVIOR", height=30, fg_color="gray25", corner_radius=10
         )
-        self._title.grid(row=0, column=0, columnspan=6, padx=10, pady=10, sticky="ew")
+        self._title.grid(row=0, column=0, columnspan=7, padx=10, pady=10, sticky="ew")
 
         self._query_input = self._add_input_field(
             row=1, column=0, label="Query", default_value=config.behavior.query
         )
         self._2captcha_apikey_input = self._add_input_field(
             row=1,
-            column=3,
+            column=4,
             label="2captcha API Key",
             default_value=config.behavior.twocaptcha_apikey,
         )
@@ -268,7 +268,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         )
         self._ad_page_max_wait_input = self._add_input_field(
             row=2,
-            column=3,
+            column=4,
             label="Ad page max wait",
             default_value=config.behavior.ad_page_max_wait,
         )
@@ -281,7 +281,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         )
         self._nonad_page_max_wait_input = self._add_input_field(
             row=3,
-            column=3,
+            column=4,
             label="Non-ad page max wait",
             default_value=config.behavior.nonad_page_max_wait,
         )
@@ -294,7 +294,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         )
         self._running_interval_end_input = self._add_input_field(
             row=4,
-            column=3,
+            column=4,
             label="Running interval end",
             default_value=config.behavior.running_interval_end,
         )
@@ -306,7 +306,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
             default_value=str(config.behavior.max_scroll_limit),
         )
         self._click_order_input = self._add_input_field(
-            row=5, column=3, label="Click order", default_value=config.behavior.click_order
+            row=5, column=4, label="Click order", default_value=config.behavior.click_order
         )
 
         self._browser_count_input = self._add_input_field(
@@ -314,7 +314,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         )
         self._multiprocess_style_input = self._add_input_field(
             row=6,
-            column=3,
+            column=4,
             label="Multiprocess style",
             default_value=config.behavior.multiprocess_style,
         )
@@ -323,7 +323,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
             row=7, column=0, label="Loop wait time", default_value=config.behavior.loop_wait_time
         )
         self._wait_factor_input = self._add_input_field(
-            row=7, column=3, label="Wait factor", default_value=config.behavior.wait_factor
+            row=7, column=4, label="Wait factor", default_value=config.behavior.wait_factor
         )
 
         excludes_label = customtkinter.CTkLabel(self, text="Excludes")
@@ -332,7 +332,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         self._excludes_input = customtkinter.CTkTextbox(
             self, height=self.relative_height, corner_radius=10
         )
-        self._excludes_input.grid(row=8, column=1, columnspan=5, padx=10, pady=5, sticky="ew")
+        self._excludes_input.grid(row=8, column=1, columnspan=6, padx=10, pady=5, sticky="ew")
         self._excludes_input.insert("1.0", config.behavior.excludes)
 
         self._check_shopping_ads_value = self._add_checkbox(
@@ -352,6 +352,9 @@ class BehaviorFrame(customtkinter.CTkFrame):
         )
         self._send_to_android_value = self._add_checkbox(
             row=9, column=5, label="Send to Android", enabled=config.behavior.send_to_android
+        )
+        self._request_boost_value = self._add_checkbox(
+            row=9, column=6, label="Request boost", enabled=config.behavior.request_boost
         )
 
     def get_behavior_config(self) -> dict[str, str]:
@@ -383,6 +386,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
             "hooks_enabled": self._hooks_enabled_value.get(),
             "telegram_enabled": self._telegram_enabled_value.get(),
             "send_to_android": self._send_to_android_value.get(),
+            "request_boost": self._request_boost_value.get(),
         }
 
     def _add_input_field(

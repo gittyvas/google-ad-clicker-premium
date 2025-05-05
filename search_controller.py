@@ -27,7 +27,14 @@ from clicklogs_db import ClickLogsDB
 from config_reader import config
 from logger import logger
 from stats import SearchStats
-from utils import Direction, add_cookies, solve_recaptcha, get_random_sleep, resolve_redirect
+from utils import (
+    Direction,
+    add_cookies,
+    solve_recaptcha,
+    get_random_sleep,
+    resolve_redirect,
+    boost_requests,
+)
 
 
 LinkElement = selenium.webdriver.remote.webelement.WebElement
@@ -344,6 +351,9 @@ class SearchController:
 
         self._update_click_stats(site_url, click_time, category)
 
+        if config.behavior.request_boost:
+            boost_requests(url)
+
         wait_time = self._get_wait_time(is_ad_element) * config.behavior.wait_factor
         logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
         sleep(wait_time)
@@ -406,6 +416,9 @@ class SearchController:
                 )
 
                 self._update_click_stats(url, click_time, category)
+
+                if config.behavior.request_boost:
+                    boost_requests(self._driver.current_url)
 
                 wait_time = self._get_wait_time(is_ad_element) * config.behavior.wait_factor
                 logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")

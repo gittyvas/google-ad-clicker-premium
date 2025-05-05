@@ -50,6 +50,7 @@ class BehaviorParams:
     hooks_enabled: Optional[bool] = False
     telegram_enabled: Optional[bool] = False
     send_to_android: Optional[bool] = False
+    request_boost: Optional[bool] = False
 
 
 class ConfigReader:
@@ -121,6 +122,7 @@ class ConfigReader:
             hooks_enabled=config["behavior"]["hooks_enabled"],
             telegram_enabled=config["behavior"]["telegram_enabled"],
             send_to_android=config["behavior"]["send_to_android"],
+            request_boost=config["behavior"]["request_boost"],
         )
 
 

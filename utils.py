@@ -1,8 +1,10 @@
 import sys
 import json
 import random
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
+from itertools import cycle
 from pathlib import Path
 from time import sleep
 from typing import Optional
@@ -27,6 +29,7 @@ except ImportError:
 from config_reader import config
 from geolocation_db import GeolocationDB
 from logger import logger
+from proxy import get_proxies
 
 
 class Direction(Enum):
@@ -628,3 +631,51 @@ def resolve_redirect(url: str) -> str:
     except requests.RequestException as exp:
         logger.error(f"Error resolving URL redirection: {exp}")
         return url
+
+
+def _make_boost_request(url: str, proxy: str, user_agent: str) -> None:
+    """Make a single GET request for the given url through a random proxy and user agent
+
+    :type url: str
+    :param url: Input URL to send request to
+    :type proxy: str
+    :param proxy: Proxy to use for the request
+    :type user_agent: str
+    :param user_agent: User agent to use for the request
+    """
+
+    headers = {"User-Agent": user_agent}
+    proxy_config = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+
+    try:
+        response = requests.get(url, headers=headers, proxies=proxy_config, timeout=5)
+        logger.debug(
+            f"Boosted [{url}] via [{proxy.split('@')[1] if '@' in proxy else proxy}] "
+            f"UA={headers['User-Agent']}, Response code: {response.status_code}"
+        )
+
+    except Exception as exp:
+        logger.debug(f"Boost request failed for [{url}] via [{proxy}]: {exp}")
+
+
+def boost_requests(url: str) -> None:
+    """Send multiple requests to the given URL
+
+    :type url: str
+    :param url: Input URL to send requests to
+    """
+
+    logger.debug(f"Sending 10 requests to [{url}]...")
+
+    proxies = get_proxies()
+    user_agents = _get_user_agents(config.paths.user_agents)
+
+    random.shuffle(proxies)
+    random.shuffle(user_agents)
+
+    proxy = cycle(proxies)
+    user_agent = cycle(user_agents)
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for _ in range(10):
+            executor.submit(_make_boost_request, url, next(proxy), next(user_agent))
