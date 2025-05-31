@@ -168,13 +168,15 @@ class SearchController:
 
         if not self._driver.find_elements(*self.RESULTS_CONTAINER):
             self._close_cookie_dialog()
-            logger.debug(f"Reentering search query '{self._search_query}'")
-            search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-            self._type_humanlike(search_input_box, self._search_query)
 
-            # sleep after entering search keyword by randomly selected amount
-            # between 2 to 3 seconds
-            sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
+            search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
+            if not search_input_box.get_attribute("value"):
+                logger.debug(f"Reentering search query '{self._search_query}'")
+                self._type_humanlike(search_input_box, self._search_query)
+
+                # sleep after entering search keyword by randomly selected amount
+                # between 2 to 3 seconds
+                sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
 
         if self._hooks_enabled:
             hooks.after_query_sent_hook(self._driver, self._search_query)
@@ -864,8 +866,9 @@ class SearchController:
 
                             try:
                                 search_input_box = self._driver.find_element(*self.SEARCH_INPUT)
-                                self._type_humanlike(search_input_box, self._search_query)
-                                break
+                                if not search_input_box.get_attribute("value"):
+                                    self._type_humanlike(search_input_box, self._search_query)
+                                    break
                             except (
                                 ElementNotInteractableException,
                                 StaleElementReferenceException,
@@ -1172,6 +1175,10 @@ class SearchController:
 
             except ElementNotInteractableException:
                 logger.debug("Location dialog button element is not interactable!")
+
+        finally:
+            # if no not now or continue button exists, send ESC to page to close the dialog
+            self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
 
     def _type_humanlike(
         self, element: selenium.webdriver.remote.webelement.WebElement, text: str

@@ -10,7 +10,6 @@ from time import sleep
 from typing import Optional
 
 try:
-    import pyautogui
     import requests
     import openpyxl
     import undetected_chromedriver
@@ -20,7 +19,6 @@ except ImportError:
     packages_path = Path.cwd() / "env" / "Lib" / "site-packages"
     sys.path.insert(0, f"{packages_path}")
 
-    import pyautogui
     import requests
     import openpyxl
     import undetected_chromedriver
@@ -95,7 +93,7 @@ def get_location(geolocation_db_client: GeolocationDB, proxy: str) -> tuple[floa
     ip_address = ""
 
     if config.webdriver.auth:
-        for cycle in range(2):
+        for repeat in range(2):
             try:
                 response = requests.get("https://api.ipify.org", proxies=proxies_header, timeout=5)
                 ip_address = response.text
@@ -138,7 +136,7 @@ def get_location(geolocation_db_client: GeolocationDB, proxy: str) -> tuple[floa
                     except Exception as exp:
                         logger.debug(exp)
 
-                        if cycle == 1:
+                        if repeat == 1:
                             break
 
                         request_retry_timeout = 60 * config.behavior.wait_factor
