@@ -323,6 +323,7 @@ def create_seleniumbase_driver(
         do_not_track=True,
         user_agent=user_agent,
         proxy_string=proxy or None,
+        multi_proxy=config.behavior.browser_count > 1,
         incognito=config.webdriver.incognito,
         locale_code=str(lang) if config.webdriver.language_from_proxy else None,
     )
