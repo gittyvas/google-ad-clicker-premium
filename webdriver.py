@@ -161,12 +161,14 @@ def create_webdriver(
     chrome_options.add_argument("--disable-backgrounding-occluded-windows")
     chrome_options.add_argument("--disable-hang-monitor")
     chrome_options.add_argument("--dns-prefetch-disable")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--disable-search-engine-choice-screen")
     chrome_options.add_argument(f"--user-agent={user_agent}")
 
     if IS_POSIX:
         chrome_options.add_argument("--disable-setuid-sandbox")
 
-    optimization_features = [
+    disabled_features = [
         "OptimizationGuideModelDownloading",
         "OptimizationHintsFetching",
         "OptimizationTargetPrediction",
@@ -174,8 +176,11 @@ def create_webdriver(
         "Translate",
         "DownloadBubble",
         "DownloadBubbleV2",
+        "PrivacySandboxSettings4",
+        "UserAgentClientHint",
+        "DisableLoadExtensionCommandLineSwitch",
     ]
-    chrome_options.add_argument(f"--disable-features={','.join(optimization_features)}")
+    chrome_options.add_argument(f"--disable-features={','.join(disabled_features)}")
 
     # disable WebRTC IP tracking
     webrtc_preferences = {
