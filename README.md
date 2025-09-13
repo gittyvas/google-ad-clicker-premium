@@ -36,6 +36,12 @@ This command-line tool clicks ads for a certain query on Google search using [un
 * Requires Python 3.9 to 3.11
 * Requires the latest Chrome version
 
+---
+> Don't hesitate to give a ⭐ if you liked the project.
+
+> See [Support](#support) section below for more options to support.
+---
+
 
 ## How to setup
 
@@ -372,3 +378,9 @@ If you benefit from this tool, please give a star and consider donating using th
 
 * ETH: 0x461c1B3bd9c3E2d949C56670C088465Bf3457F4B
 * USDT: 0x1a4f06937100Dc704031386667D731Bea0670aaf
+
+---
+
+* Support project by buying it once [here](https://buy.stripe.com/4gw6rGffD3lYdYQ4gu).
+
+* Support project by monthly subscription($10/month) [here](https://buy.stripe.com/aFa9AU5o44nq6yb9di4Ni0i).
