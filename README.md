@@ -67,6 +67,8 @@ See [here](https://github.com/coskundeniz/ad_clicker/wiki/Setup-for-Windows) for
 
 ## How to run
 
+* Please read all the config option explanations and FAQ section before starting.
+
 * You need to see `(env)` at the beginning of your command prompt that is showing virtual environment is activated.
 
 * Before running the below commands for the first time, run `python ad_clicker.py -q test` once and end it by pressing CTRL+C after seeing the browser opened.

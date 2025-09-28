@@ -1,4 +1,5 @@
 import json
+import subprocess
 import traceback
 from typing import Optional
 
@@ -25,7 +26,12 @@ class PathsFrame(customtkinter.CTkFrame):
         self.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.relative_width = master.winfo_screenwidth() // 100
-        self.relative_height = master.winfo_screenheight() // 100
+
+        dpi = master.winfo_fpixels("1i")
+        scale_factor = dpi / 96.0
+
+        base_height = int(30 * scale_factor)  # 30px base height
+        self.button_height = max(30, min(40, base_height))
 
         self._title = customtkinter.CTkLabel(
             self, text="PATHS", height=30, fg_color="gray25", corner_radius=10
@@ -91,14 +97,14 @@ class PathsFrame(customtkinter.CTkFrame):
         path_label = customtkinter.CTkLabel(self, text=label)
         path_label.grid(row=row, column=0, padx=10, sticky="w")
 
-        path_textbox = customtkinter.CTkTextbox(self, height=self.relative_height, corner_radius=10)
+        path_textbox = customtkinter.CTkTextbox(self, height=self.button_height, corner_radius=10)
         path_textbox.grid(row=row, column=1, pady=5, sticky="ew")
         path_textbox.insert("1.0", default_value)
 
         open_file_button = customtkinter.CTkButton(
             self,
             text="Browse",
-            height=self.relative_height * 3,
+            height=self.button_height,
             command=lambda: self.open_file_dialog(path_textbox),
         )
         open_file_button.grid(row=row, column=2, padx=self.relative_width, pady=5, sticky="ew")
@@ -114,7 +120,6 @@ class WebdriverFrame(customtkinter.CTkFrame):
 
         self.grid_columnconfigure((0, 1, 2), weight=1)
 
-        self.relative_width = master.winfo_screenwidth() // 100
         self.relative_height = master.winfo_screenheight() // 100
 
         self._title = customtkinter.CTkLabel(
@@ -223,7 +228,7 @@ class WebdriverFrame(customtkinter.CTkFrame):
         checkbox = customtkinter.CTkCheckBox(
             self,
             text=label,
-            height=self.relative_height * 3,
+            height=self.relative_height * 2,
             variable=checkbox_value,
         )
         checkbox.grid(row=row, column=column, padx=10, pady=5, sticky="w")
@@ -242,7 +247,6 @@ class BehaviorFrame(customtkinter.CTkFrame):
 
         self.grid_columnconfigure((0, 1, 2, 3, 4, 5, 6), weight=1)
 
-        self.relative_width = master.winfo_screenwidth() // 100
         self.relative_height = master.winfo_screenheight() // 100
 
         self._title = customtkinter.CTkLabel(
@@ -440,7 +444,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
         checkbox = customtkinter.CTkCheckBox(
             self,
             text=label,
-            height=self.relative_height * 3,
+            height=self.relative_height * 2,
             variable=checkbox_value,
         )
         checkbox.grid(row=row, column=column, padx=10, pady=5, sticky="w")
@@ -459,40 +463,51 @@ class ActionButtonsFrame(customtkinter.CTkFrame):
 
         self.grid_columnconfigure((0, 1, 2, 3, 4, 5), weight=1)
 
-        self.relative_width = master.winfo_screenwidth() // 100
-        self.relative_height = master.winfo_screenheight() // 100
+        dpi = master.winfo_fpixels("1i")
+        scale_factor = dpi / 96.0
+
+        base_height = int(30 * scale_factor)  # 30px base height
+        self.button_height = max(30, min(40, base_height))
 
         self.save_button = customtkinter.CTkButton(
             self,
-            text="Save Configuration",
-            height=self.relative_height * 3,
+            text="SAVE CONFIGURATION",
+            height=self.button_height,
             command=master.save_button_callback,
         )
-        self.save_button.grid(row=3, column=0, columnspan=6, padx=10, pady=(20, 5), sticky="ew")
+        self.save_button.grid(row=3, column=0, columnspan=3, padx=10, pady=(10, 5), sticky="ew")
+
+        self.report_button = customtkinter.CTkButton(
+            self,
+            text="GENERATE CLICK REPORT",
+            height=self.button_height,
+            command=master.report_generation_command,
+        )
+        self.report_button.grid(row=3, column=3, columnspan=3, padx=10, pady=(10, 5), sticky="ew")
 
         self.run_button_1 = customtkinter.CTkButton(
             self,
-            text="Run ad_clicker.py",
-            height=self.relative_height * 3,
+            text="RUN ad_clicker.py",
+            height=self.button_height,
             command=master.ad_clicker_script,
         )
-        self.run_button_1.grid(row=4, column=0, columnspan=3, padx=10, pady=5, sticky="ew")
+        self.run_button_1.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
         self.run_button_2 = customtkinter.CTkButton(
             self,
-            text="Run run_ad_clicker.py",
-            height=self.relative_height * 3,
+            text="RUN run_ad_clicker.py",
+            height=self.button_height,
             command=master.run_ad_clicker_script,
         )
-        self.run_button_2.grid(row=4, column=3, columnspan=3, padx=10, pady=5, sticky="ew")
+        self.run_button_2.grid(row=4, column=2, columnspan=2, padx=10, pady=5, sticky="ew")
 
         self.run_button_3 = customtkinter.CTkButton(
             self,
-            text="Run run_in_loop.py",
-            height=self.relative_height * 3,
+            text="RUN run_in_loop.py",
+            height=self.button_height,
             command=master.run_in_loop_script,
         )
-        self.run_button_3.grid(row=5, column=0, columnspan=6, padx=10, pady=5, sticky="ew")
+        self.run_button_3.grid(row=4, column=4, columnspan=2, padx=10, pady=5, sticky="ew")
 
 
 class ConfigGUI(customtkinter.CTk):
@@ -502,7 +517,7 @@ class ConfigGUI(customtkinter.CTk):
         super().__init__()
 
         self.title("Google Ads Clicker Premium")
-        self.geometry("1500x920")
+        self.geometry("1500x900")
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -538,6 +553,14 @@ class ConfigGUI(customtkinter.CTk):
         logger.info("Configuration was saved successfully.")
 
         config.read_parameters()
+
+    def report_generation_command(self):
+        """Run the ad_clicker.py script to generate Excel report"""
+
+        command = ["python", "ad_clicker.py"]
+        command.extend(["--report_clicks", "--excel"])
+
+        subprocess.run(command)
 
     def ad_clicker_script(self):
         """Run the ad_clicker.py script"""
