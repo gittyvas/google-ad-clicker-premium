@@ -1,6 +1,7 @@
 import random
-import traceback
 import subprocess
+import sys
+import traceback
 from concurrent.futures import ProcessPoolExecutor, wait
 from itertools import cycle
 from pathlib import Path
@@ -33,7 +34,13 @@ def start_tool(
 
     sleep(start_timeout * config.behavior.wait_factor)
 
-    command = ["python", "ad_clicker.py"]
+    if getattr(sys, "frozen", False):
+        # reinvoke the same EXE and dispatch into ad_clicker.main
+        command = [sys.executable, "--ad-clicker"]
+    else:
+        # command line mode: run the script like before
+        command = [sys.executable, "ad_clicker.py"]
+
     command.extend(["-q", query, "-p", proxy, "--id", str(browser_id)])
 
     if device_id:

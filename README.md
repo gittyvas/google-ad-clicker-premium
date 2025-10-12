@@ -45,6 +45,10 @@ This command-line tool clicks ads for a certain query on Google search using [un
 
 ## How to setup
 
+> ⚙️ If you want a ready to use [EXE for Windows](https://vimeo.com/1126408117), you can [buy it here](https://buy.stripe.com/5kQ7sMaIo07acWzdty4Ni0j). This will also help support the project.
+
+---
+
 * Run the following commands in the project directory to install the required packages.
     * `python -m venv env`
     * `source env/bin/activate`

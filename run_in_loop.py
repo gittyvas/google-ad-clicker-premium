@@ -1,5 +1,6 @@
 import traceback
 import subprocess
+import sys
 from time import sleep
 from datetime import datetime
 
@@ -39,7 +40,12 @@ def _inside_running_interval() -> bool:
 
 def main() -> None:
 
-    command = ["python", "run_ad_clicker.py"]
+    if getattr(sys, "frozen", False):
+        # reinvoke the same EXE and dispatch into run_ad_clicker.main
+        command = [sys.executable, "--run-ad-clicker"]
+    else:
+        # command line mode: run the script like before
+        command = [sys.executable, "run_ad_clicker.py"]
 
     while True:
 
