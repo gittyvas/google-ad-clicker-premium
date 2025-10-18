@@ -2,34 +2,34 @@
 
 This command-line tool clicks ads for a certain query on Google search using [undetected_chromedriver](https://github.com/ultrafunkamsterdam/undetected-chromedriver) or [SeleniumBase](https://github.com/seleniumbase/SeleniumBase) packages. Supports proxy, running multiple simultaneous browsers, ad targeting/exclusion, and running in loop.
 
-* Additional Features in Premium
+### Features
 
-    * 🛠️ Single config file for all options
-    * 🖥️ Desktop UI for configuration and run
-    * 🗑️ Clear cache and cookies on browser exit
-    * 📄 External file for user agents
-    * 🖼️ Set browser window size
-    * 🎲 Shift browser windows by random offsets
-    * 🌍 Set opening URL based on the proxy country
-    * 🈵 Set browser language based on the proxy country
-    * 🖱️ Random scrolls and mouse movements on pages
-    * 🔗 Click non-ad links with domain filtering or in random
-    * 🔄 Custom click order between ad and non-ad links
-    * ⏱️ Set min/max waiting range for ad and non-ad pages
-    * 📜 Limit max scroll on the search results page
-    * 🍪 Use custom collected cookies
-    * ⏳ Set the running interval time
-    * 📊 Summary of statistics
-    * 🛍️ Click on the top shopping ads up to 5
-    * 🔐 2captcha integration
-    * 📨 Telegram notification
-    * 📝 Generate daily click report
-    * 📱 Open found links on Android device
-    * 🪝 Hooks for extending the tool with custom behavior
-    * 🚀 Request boost
-    * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://vimeo.com/1072189164))
+* 🛠️ Single config file for all options
+* 🖥️ Desktop UI for configuration and run
+* 🗑️ Clear cache and cookies on browser exit
+* 📄 External file for user agents
+* 🖼️ Set browser window size
+* 🎲 Shift browser windows by random offsets
+* 🌍 Set opening URL based on the proxy country
+* 🈵 Set browser language based on the proxy country
+* 🖱️ Random scrolls and mouse movements on pages
+* 🔗 Click non-ad links with domain filtering or in random
+* 🔄 Custom click order between ad and non-ad links
+* ⏱️ Set min/max waiting range for ad and non-ad pages
+* 📜 Limit max scroll on the search results page
+* 🍪 Use custom collected cookies
+* ⏳ Set the running interval time
+* 📊 Summary of statistics
+* 🛍️ Click on the top shopping ads up to 5
+* 🔐 2captcha integration
+* 📨 Telegram notification
+* 📝 Generate daily click report
+* 📱 Open found links on Android device
+* 🪝 Hooks for extending the tool with custom behavior
+* 🚀 Request boost
+* 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7) - only for this feature) ([see how it works](https://vimeo.com/1072189164))
 
-        ![click report](assets/dashboard.png)
+    ![click report](assets/dashboard.png)
 
 <br>
 
