@@ -112,7 +112,7 @@ The followings are the default values in the config file.
         "auth": true,
         "incognito": false,
         "country_domain": false,
-        "language_from_proxy": false,
+        "language_from_proxy": true,
         "ss_on_exception": false,
         "window_size": "",
         "shift_windows": false,

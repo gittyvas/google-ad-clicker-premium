@@ -2,6 +2,7 @@ import os
 import random
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from time import sleep
 from typing import Optional, Union
@@ -193,6 +194,13 @@ def create_webdriver(
     if config.webdriver.incognito:
         chrome_options.add_argument("--incognito")
 
+    base_dir = Path(tempfile.gettempdir()) / "uc_profiles"
+    base_dir.mkdir(exist_ok=True)
+    profile_dir = base_dir / f"profile_{random.randint(1000, 9999)}"
+
+    chrome_options.add_argument(f"--user-data-dir={profile_dir}")
+    chrome_options.add_argument("--profile-directory=Default")
+
     country_code = None
 
     multi_browser_flag_file = Path(".MULTI_BROWSERS_IN_USE")
@@ -203,8 +211,6 @@ def create_webdriver(
         driver_exe_path = _get_driver_exe_path()
 
     if proxy:
-        logger.info(f"Using proxy: {proxy}")
-
         if config.webdriver.auth:
             if "@" not in proxy or proxy.count(":") != 2:
                 raise ValueError(
@@ -214,10 +220,17 @@ def create_webdriver(
             username, password = proxy.split("@")[0].split(":")
             host, port = proxy.split("@")[1].split(":")
 
+            masked_username = username[:3] + "***" + username[-3:] if len(username) > 6 else "***"
+            masked_password = password[:3] + "***" + password[-3:] if len(password) > 6 else "***"
+            masked_proxy = f"{masked_username}:{masked_password}@{host}:{port}"
+
+            logger.info(f"Using proxy: {masked_proxy}")
+            logger.debug(f"Using proxy: {proxy}")
+
             install_plugin(chrome_options, host, int(port), username, password, plugin_folder_name)
             sleep(2 * config.behavior.wait_factor)
-
         else:
+            logger.info(f"Using proxy: {proxy}")
             chrome_options.add_argument(f"--proxy-server={proxy}")
 
         # get location of the proxy IP
@@ -251,6 +264,8 @@ def create_webdriver(
 
                 if response.status_code == 200:
                     timezone = response.json()["tz_name"]
+
+            driver._custom_timezone = timezone
 
             driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": timezone})
 
@@ -307,19 +322,33 @@ def create_seleniumbase_driver(
     country_code = None
 
     if proxy:
-        logger.info(f"Using proxy: {proxy}")
-
         if config.webdriver.auth:
             if "@" not in proxy or proxy.count(":") != 2:
                 raise ValueError(
                     "Invalid proxy format! Should be in 'username:password@host:port' format"
                 )
 
+            username, password = proxy.split("@")[0].split(":")
+            host, port = proxy.split("@")[1].split(":")
+
+            masked_username = username[:3] + "***" + username[-3:] if len(username) > 6 else "***"
+            masked_password = password[:3] + "***" + password[-3:] if len(password) > 6 else "***"
+            masked_proxy = f"{masked_username}:{masked_password}@{host}:{port}"
+
+            logger.info(f"Using proxy: {masked_proxy}")
+            logger.debug(f"Using proxy: {proxy}")
+        else:
+            logger.info(f"Using proxy: {proxy}")
+
         # get location of the proxy IP
         lat, long, country_code, timezone = get_location(geolocation_db_client, proxy)
 
         if config.webdriver.language_from_proxy:
             lang = get_locale_language(country_code)
+
+    base_dir = Path(tempfile.gettempdir()) / "sb_profiles"
+    base_dir.mkdir(exist_ok=True)
+    profile_dir = base_dir / f"profile_{random.randint(1000,9999)}"
 
     driver = seleniumbase.get_driver(
         browser_name="chrome",
@@ -331,6 +360,7 @@ def create_seleniumbase_driver(
         multi_proxy=config.behavior.browser_count > 1,
         incognito=config.webdriver.incognito,
         locale_code=str(lang) if config.webdriver.language_from_proxy else None,
+        user_data_dir=str(profile_dir),
     )
 
     # set geolocation and timezone if available
@@ -346,7 +376,10 @@ def create_seleniumbase_driver(
             if response.status_code == 200:
                 timezone = response.json()["tz_name"]
 
+        driver._custom_timezone = timezone
+
         driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": timezone})
+
         logger.debug(
             f"Timezone of {proxy.split('@')[1] if config.webdriver.auth else proxy}: {timezone}"
         )
@@ -459,73 +492,566 @@ def _execute_stealth_js_code(driver: Union[undetected_chromedriver.Chrome, selen
     - https://browserleaks.com/webrtc
     - https://browserleaks.com/webgl
 
+    For bot check
+    - https://pixelscan.net/bot-check
+    - https://www.browserscan.net/
+    - https://bot.sannysoft.com/
+
     :type driver: Union[undetected_chromedriver.Chrome, seleniumbase.Driver]
     :param driver: WebDriver instance
     """
 
-    stealth_js = r"""
-    (() => {
-    // 1) Random vendor/platform/WebGL info
-    const vendors = ["Intel Inc.","NVIDIA Corporation","AMD","Google Inc."];
-    const renderers = ["ANGLE (Intel® Iris™ Graphics)","ANGLE (NVIDIA GeForce)","WebKit WebGL"];
-    const vendor = vendors[Math.floor(Math.random()*vendors.length)];
-    const renderer = renderers[Math.floor(Math.random()*renderers.length)];
-    Object.defineProperty(navigator, "vendor", { get: ()=>vendor });
-    Object.defineProperty(navigator, "platform", { get: ()=>["Win32","Linux x86_64","MacIntel"][Math.floor(Math.random()*3)] });
+    # timezone spoofing and normalization
+    timezone = getattr(driver, "_custom_timezone", None)
 
-    // 2) Canvas 2D noise
-    const rawToDataURL = HTMLCanvasElement.prototype.toDataURL;
-    HTMLCanvasElement.prototype.toDataURL = function(type, ...args) {
-        const ctx = this.getContext("2d");
-        const image = ctx.getImageData(0,0,this.width,this.height);
-        for(let i=0;i<image.data.length;i+=4){
-        const noise = (Math.random()-0.5)*2; // -1..+1
-        image.data[i]   = image.data[i]+noise;    // R
-        image.data[i+1] = image.data[i+1]+noise;  // G
-        image.data[i+2] = image.data[i+2]+noise;  // B
-        }
-        ctx.putImageData(image,0,0);
-        return rawToDataURL.apply(this,[type,...args]);
-    };
+    if timezone:
+        driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": timezone})
 
-    // 3) Canvas toBlob noise
-    const rawToBlob = HTMLCanvasElement.prototype.toBlob;
-    HTMLCanvasElement.prototype.toBlob = function(cb, type, quality) {
-        const ctx = this.getContext("2d");
-        const image = ctx.getImageData(0,0,this.width,this.height);
-        for(let i=0;i<image.data.length;i+=4){
-        const noise = (Math.random()-0.5)*2;
-        image.data[i]   += noise;
-        image.data[i+1] += noise;
-        image.data[i+2] += noise;
-        }
-        ctx.putImageData(image,0,0);
-        return rawToBlob.call(this,cb,type,quality);
-    };
+        timezone_js = f"""
+        (() => {{
+            const tz = "{timezone}";
+            const getOffset = (tzName) => {{
+                try {{
+                    const now = new Date();
+                    const local = new Date(now.toLocaleString("en-US", {{ timeZone: tzName }}));
+                    const utc = new Date(now.toLocaleString("en-US", {{ timeZone: "UTC" }}));
+                    return (utc - local) / 60000; // minutes
+                }} catch (e) {{
+                    return 0;
+                }}
+            }};
+            const offset = getOffset(tz);
+            const sign = offset <= 0 ? "+" : "-";
+            const absOffset = Math.abs(offset);
+            const hours = String(Math.floor(absOffset / 60)).padStart(2, "0");
+            const minutes = String(Math.abs(offset) % 60).padStart(2, "0");
+            const gmtString = `GMT${{sign}}${{hours}}${{minutes}}`;
 
-    // 4) WebGL patch: vendor/renderer
-    const getParam = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(param) {
-        if(param === 37445) return vendor;    // UNMASKED_VENDOR_WEBGL
-        if(param === 37446) return renderer;  // UNMASKED_RENDERER_WEBGL
-        return getParam.call(this,param);
-    };
+            // Patch Intl
+            const origIntl = Intl.DateTimeFormat.prototype.resolvedOptions;
+            Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
+                const opts = origIntl.call(this);
+                opts.timeZone = tz;
+                return opts;
+            }};
 
-    // 5) WebRTC IP leak prevention
-    const OrigRTCPeer = window.RTCPeerConnection;
-    window.RTCPeerConnection = function(cfg, opts) {
-        const pc = new OrigRTCPeer(cfg, opts);
-        const origCreateOffer = pc.createOffer;
-        pc.createOffer = function() {
-        return origCreateOffer.apply(this).then(o => {
-            o.sdp = o.sdp.replace(/^a=candidate:.+$/gm,"");
-            return o;
+            // Patch Date
+            const origOffset = Date.prototype.getTimezoneOffset;
+            Date.prototype.getTimezoneOffset = function() {{ return offset; }};
+
+            const origToString = Date.prototype.toString;
+            Date.prototype.toString = function() {{
+                const str = origToString.call(this);
+                return str.replace(/GMT[+-]\\d{{4}}.*$/, `${{gmtString}} (${{tz}})`);
+            }};
+
+            const origLocale = Date.prototype.toLocaleString;
+            Date.prototype.toLocaleString = function(...args) {{
+                const opts = args[1] || {{}};
+                if (!opts.timeZone) opts.timeZone = tz;
+                return origLocale.call(this, args[0] || undefined, opts);
+            }};
+
+            // Hide modifications
+            const fakeNative = (n) => `function ${{n}}() {{ [native code] }}`;
+            [
+                Date.prototype.getTimezoneOffset,
+                Date.prototype.toString,
+                Date.prototype.toLocaleString,
+                Intl.DateTimeFormat.prototype.resolvedOptions
+            ].forEach(fn => {{
+                if (fn && fn.name)
+                    Object.defineProperty(fn, "toString", {{ value: () => fakeNative(fn.name) }});
+            }});
+
+            // Proxy Intl.DateTimeFormat constructor for consistency
+            Object.defineProperty(Intl, "DateTimeFormat", {{
+                value: new Proxy(Intl.DateTimeFormat, {{
+                    construct(target, args) {{
+                        if (args[1] && args[1].timeZone)
+                            args[1].timeZone = tz;
+                        return new target(...args);
+                    }}
+                }})
+            }});
+        }})();
+        """
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": timezone_js})
+
+    # DevTools detection prevention
+    devtools_evasion_js = """
+    (function() {
+        const realInnerWidth = window.innerWidth;
+        const realInnerHeight = window.innerHeight;
+
+        // The key: outerHeight should be VERY CLOSE to innerHeight (browser closed)
+        // Not random, but consistent small difference
+        try {
+            Object.defineProperty(window, 'outerHeight', {
+                get: function() {
+                    return realInnerHeight + 39;
+                },
+                configurable: true
+            });
+
+            Object.defineProperty(window, 'outerWidth', {
+                get: function() {
+                    return realInnerWidth + 12;
+                },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // 2. Override innerWidth/innerHeight to be stable
+        try {
+            Object.defineProperty(window, 'innerWidth', {
+                get: function() {
+                    return realInnerWidth;
+                },
+                configurable: true
+            });
+
+            Object.defineProperty(window, 'innerHeight', {
+                get: function() {
+                    return realInnerHeight;
+                },
+                configurable: true
+            });
+        } catch(e) {}
+
+        // 3. Override screen properties
+        try {
+            Object.defineProperty(screen, 'availWidth', {
+                get: () => screen.width,
+                configurable: true
+            });
+            Object.defineProperty(screen, 'availHeight', {
+                get: () => screen.height,
+                configurable: true
+            });
+        } catch(e) {}
+
+        // 4. Remove debugger detection
+        Object.defineProperty(window, 'devtools', {
+            get: () => undefined,
+            set: () => {},
+            configurable: false
         });
+
+        // 5. Override console methods
+        const noop = () => {};
+        ['log', 'debug', 'info', 'warn', 'error'].forEach(m => {
+            console[m] = noop;
+        });
+
+        // 6. Block Function toString inspection
+        const OriginalToString = Function.prototype.toString;
+        Function.prototype.toString = function() {
+            if (this === Function.prototype.toString) {
+                return 'function toString() { [native code] }';
+            }
+            return 'function() { [native code] }';
         };
-        return pc;
-    };
-    window.RTCPeerConnection.prototype = OrigRTCPeer.prototype;
+
+        // 7. Prevent Error.stack inspection
+        const OriginalError = Error;
+        window.Error = function(...args) {
+            const error = new OriginalError(...args);
+            if (error.stack) {
+                error.stack = error.stack.split('\\n').slice(0, 2).join('\\n');
+            }
+            return error;
+        };
+
+        // 8. Block debugger statement
+        window.eval = new Proxy(window.eval, {
+            apply(target, thisArg, args) {
+                if (args[0] && args[0].includes('debugger')) {
+                    return undefined;
+                }
+                return Reflect.apply(target, thisArg, args);
+            }
+        });
+
     })();
     """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": devtools_evasion_js})
 
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})
+    # navigator.plugins evasion
+    plugins_js = """
+    (function() {
+        // Save original PluginArray and MimeTypeArray constructors
+        const OriginalPluginArray = PluginArray;
+        const OriginalMimeTypeArray = MimeTypeArray;
+
+        // Create MimeType objects
+        const createMimeType = (type, suffixes, description, plugin) => {
+            const mimeType = {
+                type: type,
+                suffixes: suffixes,
+                description: description,
+                enabledPlugin: plugin
+            };
+            return mimeType;
+        };
+
+        // Create Plugin objects
+        const createPlugin = (name, description, filename, mimeTypes) => {
+            const plugin = {
+                name: name,
+                description: description,
+                filename: filename,
+                length: mimeTypes.length
+            };
+
+            mimeTypes.forEach((mimeType, index) => {
+                plugin[index] = createMimeType(
+                    mimeType.type,
+                    mimeType.suffixes,
+                    mimeType.description,
+                    plugin
+                );
+            });
+
+            plugin.item = function(index) {
+                return this[index] || null;
+            };
+
+            plugin.namedItem = function(name) {
+                for (let i = 0; i < this.length; i++) {
+                    if (this[i].type === name) return this[i];
+                }
+                return null;
+            };
+
+            return plugin;
+        };
+
+        // Create plugin data
+        const pluginsData = [
+            createPlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [
+                { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+            ]),
+            createPlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [
+                { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+            ]),
+            createPlugin('Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [
+                { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+            ]),
+            createPlugin('Microsoft Edge PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [
+                { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+            ]),
+            createPlugin('WebKit built-in PDF', 'Portable Document Format', 'internal-pdf-viewer', [
+                { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+            ])
+        ];
+
+        // Create a real PluginArray instance by extending it
+        class FakePluginArray extends OriginalPluginArray {
+            constructor(plugins) {
+                super();
+                plugins.forEach((plugin, index) => {
+                    this[index] = plugin;
+                    this[plugin.name] = plugin;
+                });
+
+                // Override length
+                Object.defineProperty(this, 'length', {
+                    get: () => plugins.length,
+                    enumerable: false
+                });
+            }
+
+            item(index) {
+                return this[index] || null;
+            }
+
+            namedItem(name) {
+                return this[name] || null;
+            }
+
+            refresh() {}
+        }
+
+        // Create the plugin array instance
+        const pluginArray = new FakePluginArray(pluginsData);
+
+        // Make methods look native
+        ['item', 'namedItem', 'refresh'].forEach(method => {
+            Object.defineProperty(pluginArray[method], 'toString', {
+                value: () => `function ${method}() { [native code] }`,
+                writable: false,
+                configurable: false
+            });
+        });
+
+        // Create MimeTypeArray
+        class FakeMimeTypeArray extends OriginalMimeTypeArray {
+            constructor(plugins) {
+                super();
+                let mimeIndex = 0;
+
+                plugins.forEach(plugin => {
+                    for (let i = 0; i < plugin.length; i++) {
+                        this[mimeIndex] = plugin[i];
+                        this[plugin[i].type] = plugin[i];
+                        mimeIndex++;
+                    }
+                });
+
+                Object.defineProperty(this, 'length', {
+                    get: () => mimeIndex,
+                    enumerable: false
+                });
+            }
+
+            item(index) {
+                return this[index] || null;
+            }
+
+            namedItem(name) {
+                return this[name] || null;
+            }
+        }
+
+        const mimeTypesArray = new FakeMimeTypeArray(pluginsData);
+
+        // Make methods look native
+        ['item', 'namedItem'].forEach(method => {
+            Object.defineProperty(mimeTypesArray[method], 'toString', {
+                value: () => `function ${method}() { [native code] }`,
+                writable: false,
+                configurable: false
+            });
+        });
+
+        // Override navigator.plugins and navigator.mimeTypes
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => pluginArray,
+            enumerable: true,
+            configurable: true
+        });
+
+        Object.defineProperty(navigator, 'mimeTypes', {
+            get: () => mimeTypesArray,
+            enumerable: true,
+            configurable: true
+        });
+
+    })();
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": plugins_js})
+
+    # iframe.contentWindow evasion
+    iframe_js = """
+    try {
+        const defaultGetter = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow').get;
+        Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+            get: function() {
+                const win = defaultGetter.call(this);
+                if (!win) return win;
+
+                try {
+                    const proxy = new Proxy(win, {
+                        get: (target, prop) => {
+                            if (prop === 'self' || prop === 'window' || prop === 'parent' || prop === 'top') {
+                                return proxy;
+                            }
+                            return Reflect.get(target, prop);
+                        },
+                        has: (target, prop) => {
+                            if (prop === 'webdriver') return false;
+                            return Reflect.has(target, prop);
+                        }
+                    });
+                    return proxy;
+                } catch(e) {
+                    return win;
+                }
+            },
+            configurable: true,
+            enumerable: true
+        });
+    } catch(e) {}
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": iframe_js})
+
+    # media codecs evasion
+    media_codecs_js = """
+    const originalCanPlayType = HTMLMediaElement.prototype.canPlayType;
+    HTMLMediaElement.prototype.canPlayType = function(type) {
+        if (type === 'video/mp4; codecs="avc1.42E01E"') return 'probably';
+        if (type === 'audio/mpeg') return 'probably';
+        if (type === 'audio/mp4; codecs="mp4a.40.2"') return 'probably';
+        return originalCanPlayType.apply(this, arguments);
+    };
+
+    Object.defineProperty(HTMLMediaElement.prototype.canPlayType, 'toString', {
+        value: () => 'function canPlayType() { [native code] }'
+    });
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": media_codecs_js})
+
+    # canvas fingerprint randomization
+    canvas_js = """
+    // Generate consistent but random noise seed
+    const noiseSeed = Math.random() * 10;
+
+    const noisify = (canvas, context) => {
+        const shift = {
+            r: Math.floor(noiseSeed * 2) - 1,
+            g: Math.floor(noiseSeed * 2) - 1,
+            b: Math.floor(noiseSeed * 2) - 1,
+            a: Math.floor(noiseSeed * 2) - 1
+        };
+
+        const width = canvas.width;
+        const height = canvas.height;
+
+        if (width > 0 && height > 0) {
+            try {
+                const imageData = context.getImageData(0, 0, width, height);
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    imageData.data[i + 0] = imageData.data[i + 0] + shift.r;
+                    imageData.data[i + 1] = imageData.data[i + 1] + shift.g;
+                    imageData.data[i + 2] = imageData.data[i + 2] + shift.b;
+                    imageData.data[i + 3] = imageData.data[i + 3] + shift.a;
+                }
+                context.putImageData(imageData, 0, 0);
+            } catch(e) {}
+        }
+    };
+
+    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    const originalToBlob = HTMLCanvasElement.prototype.toBlob;
+    const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+
+    HTMLCanvasElement.prototype.toDataURL = function(...args) {
+        const context = this.getContext('2d');
+        if (context) noisify(this, context);
+        return originalToDataURL.apply(this, args);
+    };
+
+    HTMLCanvasElement.prototype.toBlob = function(...args) {
+        const context = this.getContext('2d');
+        if (context) noisify(this, context);
+        return originalToBlob.apply(this, args);
+    };
+
+    // Protect toString
+    Object.defineProperty(HTMLCanvasElement.prototype.toDataURL, 'toString', {
+        value: () => 'function toDataURL() { [native code] }'
+    });
+    Object.defineProperty(HTMLCanvasElement.prototype.toBlob, 'toString', {
+        value: () => 'function toBlob() { [native code] }'
+    });
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": canvas_js})
+
+    # WebGL vendor/renderer randomization (enhanced)
+    webgl_js = """
+    // Hardware-based vendor/renderer pairs only (avoid SwiftShader/Google to prevent detection)
+    const webglData = [
+        { vendor: 'Intel Inc.', renderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)' },
+        { vendor: 'NVIDIA Corporation', renderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)' },
+        { vendor: 'AMD', renderer: 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)' },
+        { vendor: 'Intel Inc.', renderer: 'ANGLE (Intel, Intel(R) Iris(TM) Graphics 6100 Direct3D11 vs_5_0 ps_5_0, D3D11)' },
+        { vendor: 'NVIDIA Corporation', renderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)' }
+    ];
+
+    const selected = webglData[Math.floor(Math.random() * webglData.length)];
+    const vendor = selected.vendor;
+    const renderer = selected.renderer;
+
+    // Override getParameter for WebGLRenderingContext
+    const getParameter = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        // Unmasked vendor/renderer
+        if (parameter === 37445) return vendor;
+        if (parameter === 37446) return renderer;
+        // Standard vendor/renderer
+        if (parameter === 33901) return vendor;
+        if (parameter === 33902) return renderer;
+        // Version info
+        if (parameter === 7938) return 'WebGL 1.0 (OpenGL ES 2.0 Chromium)';
+        if (parameter === 35724) return 'WebGL GLSL ES 1.00 (OpenGL ES GLSL ES 1.0 Chromium)';
+        // Max texture size
+        if (parameter === 3379) return 16384 + Math.floor(Math.random() * 1024);
+        // Other parameters
+        if (parameter === 34076) return 16;
+        if (parameter === 34930) return 16;
+        if (parameter === 36349) return 32;
+        return getParameter.apply(this, arguments);
+    };
+
+    // Same for WebGL2RenderingContext
+    if (window.WebGL2RenderingContext) {
+        const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+        WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+            if (parameter === 37445) return vendor;
+            if (parameter === 37446) return renderer;
+            if (parameter === 33901) return vendor;
+            if (parameter === 33902) return renderer;
+            if (parameter === 7938) return 'WebGL 2.0 (OpenGL ES 3.0 Chromium)';
+            if (parameter === 35724) return 'WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)';
+            if (parameter === 3379) return 16384 + Math.floor(Math.random() * 1024);
+            if (parameter === 34076) return 16;
+            if (parameter === 34930) return 16;
+            if (parameter === 36349) return 32;
+            return getParameter2.apply(this, arguments);
+        };
+
+        Object.defineProperty(WebGL2RenderingContext.prototype.getParameter, 'toString', {
+            value: () => 'function getParameter() { [native code] }'
+        });
+    }
+
+    // Make it look native
+    Object.defineProperty(WebGLRenderingContext.prototype.getParameter, 'toString', {
+        value: () => 'function getParameter() { [native code] }'
+    });
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": webgl_js})
+
+    # WebRTC blocking
+    webrtc_js = """
+    (function() {
+        // 1. Completely disable RTCPeerConnection
+        window.RTCPeerConnection = undefined;
+        window.webkitRTCPeerConnection = undefined;
+        window.mozRTCPeerConnection = undefined;
+
+        // 2. Disable RTCDataChannel
+        window.RTCDataChannel = undefined;
+
+        // 3. Block getUserMedia
+        if (navigator.mediaDevices) {
+            navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error('Permission denied'));
+            navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new Error('Permission denied'));
+            navigator.mediaDevices.enumerateDevices = () => Promise.resolve([]);
+        }
+
+        // 4. Block legacy getUserMedia
+        if (navigator.getUserMedia) {
+            navigator.getUserMedia = (c, s, e) => e(new Error('Permission denied'));
+        }
+
+        // 5. Block webkitGetUserMedia
+        if (navigator.webkitGetUserMedia) {
+            navigator.webkitGetUserMedia = (c, s, e) => e(new Error('Permission denied'));
+        }
+
+        // 6. Disable getStats
+        if (window.RTCPeerConnection) {
+            window.RTCPeerConnection.prototype.getStats = undefined;
+        }
+
+        // 7. Disable createDataChannel
+        if (window.RTCPeerConnection) {
+            window.RTCPeerConnection.prototype.createDataChannel = undefined;
+        }
+    })();
+    """
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": webrtc_js})
+
+    logger.debug("Applied advanced stealth JavaScript techniques")

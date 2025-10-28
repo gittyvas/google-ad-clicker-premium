@@ -1,6 +1,7 @@
-import sys
 import json
+import platform
 import random
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
@@ -45,9 +46,31 @@ def get_random_user_agent_string() -> str:
     :returns: User agent string
     """
 
-    user_agents = _get_user_agents(config.paths.user_agents)
+    all_user_agents = _get_user_agents(config.paths.user_agents)
 
-    user_agent_string = random.choice(user_agents)
+    current_os = platform.system()
+    filtered_user_agents = []
+
+    if current_os == "Windows":
+        filtered_user_agents = [ua for ua in all_user_agents if "Windows" in ua]
+
+    elif current_os == "Darwin":
+        filtered_user_agents = [
+            ua
+            for ua in all_user_agents
+            if any(platform in ua for platform in ("Macintosh", "iPhone", "iPad"))
+        ]
+
+    elif current_os == "Linux":
+        filtered_user_agents = [
+            ua for ua in all_user_agents if any(platform in ua for platform in ("Linux", "Android"))
+        ]
+
+    else:
+        # fallback to all agents if no matching OS found
+        filtered_user_agents = all_user_agents
+
+    user_agent_string = random.choice(filtered_user_agents)
 
     logger.debug(f"user_agent: {user_agent_string}")
 
@@ -447,7 +470,7 @@ def take_screenshot(driver: undetected_chromedriver.Chrome) -> None:
     :param driver: Selenium Chrome webdriver instance
     """
 
-    now = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
+    now = datetime.now().strftime("%d-%m-%Y_%H_%M_%S")
     filename = f"exception_ss_{now}.png"
 
     if driver:
@@ -505,13 +528,13 @@ def generate_click_report(click_results: list[tuple[str, str, str]], report_date
     logger.info(f"Results were written to {click_report_file}")
 
 
-def get_random_sleep(start: int, end: int) -> float:
+def get_random_sleep(start: float, end: float) -> float:
     """Generate a random number from the given range
 
-    :type start: int
-    :pram start: Start value
-    :type end: int
-    :pram end: End value
+    :type start: float
+    :param start: Start value
+    :type end: float
+    :param end: End value
     :rtype: float
     :returns: Randomly selected number rounded to 2 decimals
     """
