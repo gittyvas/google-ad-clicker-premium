@@ -1,7 +1,7 @@
 {
     "paths": {
-        "query_file": "/home/coskun/queries.txt",
-        "proxy_file": "/home/coskun/proxies.txt",
+        "query_file": "queries.txt",
+        "proxy_file": "proxies.txt",
         "user_agents": "user_agents.txt",
         "filtered_domains": "domains.txt"
     },
@@ -23,7 +23,7 @@
         "nonad_page_min_wait": 15,
         "nonad_page_max_wait": 20,
         "max_scroll_limit": 0,
-        "check_shopping_ads": true,
+        "check_shopping_ads": false,
         "excludes": "",
         "random_mouse": false,
         "custom_cookies": false,

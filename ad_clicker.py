@@ -4,7 +4,6 @@ import string
 import traceback
 from argparse import ArgumentParser
 from datetime import datetime
-from itertools import chain, filterfalse, zip_longest
 from pathlib import Path
 
 import hooks
@@ -15,7 +14,6 @@ from proxy import get_proxies
 from search_controller import SearchController
 from utils import (
     get_random_user_agent_string,
-    get_domains,
     take_screenshot,
     generate_click_report,
 )
@@ -37,7 +35,7 @@ def get_arg_parser() -> ArgumentParser:
     """
 
     arg_parser = ArgumentParser(add_help=False, usage="See README.md file")
-    arg_parser.add_argument("-q", "--query", help="Search query")
+    arg_parser.add_argument("-q", "--query", help="Search query (optional, for logging)")
     arg_parser.add_argument(
         "-p",
         "--proxy",
@@ -115,14 +113,8 @@ def main():
     if args.id:
         update_log_formats(args.id)
 
-    if args.query:
-        query = args.query
-    else:
-        if not config.behavior.query:
-            logger.error("Fill the query parameter!")
-            raise SystemExit()
-
-        query = config.behavior.query
+    # Query is now optional - used only for logging/stats
+    query = args.query if args.query else config.behavior.query if config.behavior.query else "direct_site"
 
     if args.proxy:
         proxy = args.proxy
@@ -134,8 +126,6 @@ def main():
         proxy = config.webdriver.proxy
     else:
         proxy = None
-
-    domains = get_domains()
 
     user_agent = get_random_user_agent_string()
 
@@ -176,53 +166,28 @@ def main():
         if args.device_id:
             search_controller.assign_android_device(args.device_id)
 
-        ads, non_ad_links, shopping_ads = search_controller.search_for_ads(non_ad_domains=domains)
+        # Get ads from the target site (no longer doing Google search)
+        ads, non_ad_links, shopping_ads = search_controller.search_for_ads()
 
         if config.behavior.hooks_enabled:
             hooks.after_search_hook(driver)
 
-        if not (ads or shopping_ads):
-            logger.info("No ads found in the search results!")
+        if not ads:
+            logger.info("No ads found on the target site!")
 
             if config.behavior.telegram_enabled:
                 notify_matching_ads(query, links=None, stats=search_controller.stats)
         else:
-            logger.debug(f"Selected click order: {config.behavior.click_order}")
+            logger.info(f"Found {len(ads)} ads to click")
 
-            if config.behavior.click_order == 1:
-                all_links = non_ad_links + ads
-
-            elif config.behavior.click_order == 2:
-                all_links = ads + non_ad_links
-
-            elif config.behavior.click_order == 3:
-                if non_ad_links:
-                    all_links = [non_ad_links[0]] + [ads[0]] + non_ad_links[1:] + ads[1:]
-                else:
-                    logger.debug("Couldn't found non-ads! Continue with ads only.")
-                    all_links = ads
-
-            elif config.behavior.click_order == 4:
-                all_links = list(
-                    filterfalse(
-                        lambda x: not x, chain.from_iterable(zip_longest(non_ad_links, ads))
-                    )
-                )
-
-            else:
-                all_links = ads + non_ad_links
-                random.shuffle(all_links)
-
-            logger.info(f"Found {len(ads) + len(shopping_ads)} ads")
-
-            search_controller.click_shopping_ads(shopping_ads)
-            search_controller.click_links(all_links)
+            # Click all found ads
+            search_controller.click_links(ads)
 
             if config.behavior.hooks_enabled:
                 hooks.after_clicks_hook(driver)
 
             if config.behavior.telegram_enabled:
-                notify_matching_ads(query, links=ads + shopping_ads, stats=search_controller.stats)
+                notify_matching_ads(query, links=ads, stats=search_controller.stats)
 
             logger.info(search_controller.stats)
 

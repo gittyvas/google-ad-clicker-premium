@@ -22,6 +22,8 @@ except ImportError:
     import seleniumbase
     import undetected_chromedriver
 
+undetected_chromedriver.Patcher.auto = lambda self: None
+
 from config_reader import config
 from geolocation_db import GeolocationDB
 from logger import logger
@@ -242,12 +244,13 @@ def create_webdriver(
             chrome_options.add_argument(f"--lang={lang[:2]}")
 
         driver = CustomChrome(
-            driver_executable_path=(
-                driver_exe_path if multi_procs_enabled and Path(driver_exe_path).exists() else None
-            ),
+            version_main=143,
+            driver_executable_path="/teamspace/studios/this_studio/.wdm/drivers/chromedriver/linux64/143.0.7499.169/chromedriver-linux64/chromedriver",
+            browser_executable_path="/usr/bin/google-chrome-stable",
             options=chrome_options,
             user_multi_procs=multi_procs_enabled,
             use_subprocess=False,
+            patcher_force_close=True,
         )
 
         accuracy = 95
