@@ -142,4 +142,4 @@ proxy_auth_plugin/
 downloaded_files/
 
 .MULTI_BROWSERS_IN_USE
-.TELEGRAM_CHAT_ID
+.TELEGRAM_CHAT_ID*.deb
