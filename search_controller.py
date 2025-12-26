@@ -1,6 +1,7 @@
 import sys
 import json
 import random
+import math
 from datetime import datetime
 from time import sleep
 from threading import Thread
@@ -35,10 +36,12 @@ from utils import (
     boost_requests,
 )
 from webdriver import execute_stealth_js_code
+from human_simulation import HumanSimulation
 
 
 LinkElement = selenium.webdriver.remote.webelement.WebElement
-AdList = list[tuple[LinkElement, str, str]]
+# Updated type: now includes iframe_src for context switching
+AdList = list[tuple[LinkElement, str, str, Optional[str]]]  # (element, link, title, iframe_src)
 NonAdList = list[LinkElement]
 AllLinks = list[Union[AdList, NonAdList]]
 
@@ -80,6 +83,9 @@ class SearchController:
 
         self._stats = SearchStats()
 
+        # Initialize human simulation helper
+        self._human_sim = HumanSimulation(driver)
+
         if config.behavior.excludes:
             self._exclude_list = [item.strip() for item in config.behavior.excludes.split(",")]
             logger.debug(f"Words to be excluded: {self._exclude_list}")
@@ -107,13 +113,16 @@ class SearchController:
                 logger.debug(cookie)
 
         logger.info(f"Loading target site: {self.URL}")
-        sleep(get_random_sleep(2, 4) * config.behavior.wait_factor)
+
+        # Human-like page engagement before searching for ads
+        self._human_sim.random_page_engagement(min_time=2.0, max_time=4.0)
 
         if self._hooks_enabled:
             hooks.after_search_hook(self._driver)
 
-        self._make_random_scrolls()
-        self._make_random_mouse_movements()
+        # Use human-like scrolling and mouse movements
+        self._make_human_scrolls()
+        self._make_human_mouse_movements()
 
         # Get all clickable JuicyAds links from the page
         ad_links = self._get_juicyads()
@@ -130,16 +139,16 @@ class SearchController:
         - links within JuicyAds containers
 
         :rtype: AdList
-        :returns: List of (ad_element, ad_link, ad_title) tuples
+        :returns: List of (ad_element, ad_link, ad_title, iframe_src) tuples
         """
 
         logger.info("Getting JuicyAds links from target site...")
 
         ads = []
 
-        # Wait for JuicyAds script to load and render ads
+        # Wait for JuicyAds script to load and render ads with human-like behavior
         logger.debug("Waiting for JuicyAds to load...")
-        sleep(get_random_sleep(3, 5) * config.behavior.wait_factor)
+        self._human_sim.random_page_engagement(min_time=3.0, max_time=5.0)
 
         # Check if JuicyAds script is present
         try:
@@ -159,8 +168,8 @@ class SearchController:
         except TimeoutException:
             logger.warning(f"Timeout waiting for JuicyAds zone {self.JUICYADS_ZONE_ID}")
 
-        # Give extra time for ad content to load inside the container
-        sleep(get_random_sleep(3, 5) * config.behavior.wait_factor)
+        # Give extra time for ad content to load inside the container with human behavior
+        self._human_sim.random_page_engagement(min_time=3.0, max_time=5.0)
 
         # Try to find the main JuicyAds container first
         try:
@@ -182,7 +191,8 @@ class SearchController:
                     try:
                         iframes = main_container.find_elements(By.TAG_NAME, "iframe")
                         for iframe in iframes:
-                            ads.append((iframe, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", f"{title} (iframe)"))
+                            iframe_src = iframe.get_attribute("src") or ""
+                            ads.append((iframe, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", f"{title} (iframe)", None))
                             clickable_found = True
                             logger.debug("Found iframe inside JuicyAds container")
                     except NoSuchElementException:
@@ -194,7 +204,7 @@ class SearchController:
                         for link in links:
                             href = link.get_attribute("href")
                             if href:
-                                ads.append((link, href, f"{title} (link)"))
+                                ads.append((link, href, f"{title} (link)", None))
                                 clickable_found = True
                                 logger.debug(f"Found link inside JuicyAds container: {href}")
                     except NoSuchElementException:
@@ -206,7 +216,7 @@ class SearchController:
                         for img in images:
                             src = img.get_attribute("src")
                             if src:
-                                ads.append((img, src, f"{title} (banner)"))
+                                ads.append((img, src, f"{title} (banner)", None))
                                 clickable_found = True
                                 logger.debug(f"Found image inside JuicyAds container: {src}")
                     except NoSuchElementException:
@@ -214,13 +224,13 @@ class SearchController:
 
                     # If no specific clickable element found, use the container itself
                     if not clickable_found:
-                        ads.append((main_container, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", title))
+                        ads.append((main_container, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", title, None))
                         logger.debug("Using JuicyAds container as clickable element")
                 else:
                     # Container exists but empty - JuicyAds may not have loaded
                     logger.warning(f"JuicyAds container {self.JUICYADS_ZONE_ID} is empty")
                     # Still add it as clickable - sometimes ads load on interaction
-                    ads.append((main_container, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", title))
+                    ads.append((main_container, f"juicyads://zone/{self.JUICYADS_ZONE_ID}", title, None))
 
         except NoSuchElementException:
             logger.warning(f"JuicyAds container with ID {self.JUICYADS_ZONE_ID} not found")
@@ -239,18 +249,20 @@ class SearchController:
                    any(x in iframe_id.lower() for x in ['jads', 'juicy']):
 
                     # Avoid duplicates
-                    if not any(ad[0] == iframe for ad in ads):
-                        ads.append((iframe, src or f"juicyads://iframe", "JuicyAds iframe"))
+                    if not any(ad[1] == src for ad in ads if src):
+                        # Add the iframe itself as clickable (clicking on iframe is valid)
+                        ads.append((iframe, src or f"juicyads://iframe", "JuicyAds iframe", None))
                         logger.debug(f"Found JuicyAds iframe: src={src}, name={name}")
 
-                        # Try to get clickable elements inside iframe
+                        # Now get links inside the iframe - store iframe src for context
                         try:
                             self._driver.switch_to.frame(iframe)
                             iframe_links = self._driver.find_elements(By.CSS_SELECTOR, "a")
                             for link in iframe_links:
                                 href = link.get_attribute("href")
                                 if href and href.startswith("http"):
-                                    ads.append((link, href, "JuicyAds iframe link"))
+                                    # Store iframe src so we can switch back to it when clicking
+                                    ads.append((None, href, "JuicyAds iframe link", src))
                                     logger.debug(f"Found link in JuicyAds iframe: {href}")
                             self._driver.switch_to.default_content()
                         except Exception as e:
@@ -315,7 +327,7 @@ class SearchController:
         """Click shopping ads if there are any (not used for JuicyAds)
 
         :type shopping_ads: AdList
-        :param shopping_ads: List of (ad, ad_link, ad_title) tuples
+        :param shopping_ads: List of (ad, ad_link, ad_title, iframe_src) tuples
         """
         # Not applicable for JuicyAds - kept for interface compatibility
         pass
@@ -324,7 +336,7 @@ class SearchController:
         """Click links
 
         :type links: AllLinks
-        :param links: List of [(ad, ad_link, ad_title), non_ad_links]
+        :param links: List of [(ad, ad_link, ad_title, iframe_src), non_ad_links]
         """
 
         execute_stealth_js_code(self._driver)
@@ -336,7 +348,7 @@ class SearchController:
             is_ad_element = isinstance(link, tuple)
 
             try:
-                link_element, link_url, ad_title = self._extract_link_info(link, is_ad_element)
+                link_element, link_url, ad_title, iframe_src = self._extract_link_info(link, is_ad_element)
 
                 if self._hooks_enabled and is_ad_element:
                     hooks.before_ad_click_hook(self._driver)
@@ -351,11 +363,21 @@ class SearchController:
                     self._handle_android_click(link_element, link_url, is_ad_element, category)
                 else:
                     self._handle_browser_click(
-                        link_element, link_url, is_ad_element, original_window_handle, category
+                        link_element, link_url, is_ad_element, original_window_handle, category, iframe_src
                     )
 
-                # scroll the page to avoid elements remain outside of the view
-                self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
+                # Make sure we're back to default content before scrolling
+                try:
+                    self._driver.switch_to.default_content()
+                except Exception:
+                    pass
+
+                # scroll the page to avoid elements remain outside of the view using human-like scroll
+                if link_element is not None:
+                    try:
+                        self._human_sim.human_scroll_to_element(link_element)
+                    except StaleElementReferenceException:
+                        pass
 
             except StaleElementReferenceException:
                 logger.debug(
@@ -363,30 +385,32 @@ class SearchController:
                     "Skipping scroll into view..."
                 )
 
-            except Exception:
-                logger.error(f"Failed to click on [{ad_title if is_ad_element else link_url}]!")
+            except Exception as e:
+                logger.error(f"Failed to click on [{ad_title if is_ad_element else link_url}]: {e}")
 
     def _extract_link_info(self, link: Any, is_ad_element: bool) -> tuple:
         """Extract link information
 
-        :type link: tuple(ad, ad_link, ad_title) or LinkElement
-        :param link: (ad, ad_link, ad_title) for ads LinkElement for non-ads
+        :type link: tuple(ad, ad_link, ad_title, iframe_src) or LinkElement
+        :param link: (ad, ad_link, ad_title, iframe_src) for ads LinkElement for non-ads
         :type is_ad_element: bool
         :param is_ad_element: Whether it is an ad or non-ad link
         :rtype: tuple
-        :returns: (link_element, link_url, ad_title) tuple
+        :returns: (link_element, link_url, ad_title, iframe_src) tuple
         """
 
         if is_ad_element:
             link_element = link[0]
             link_url = link[1]
             ad_title = link[2]
+            iframe_src = link[3] if len(link) > 3 else None
         else:
             link_element = link
             link_url = link_element.get_attribute("href")
             ad_title = None
+            iframe_src = None
 
-        return (link_element, link_url, ad_title)
+        return (link_element, link_url, ad_title, iframe_src)
 
     def _handle_android_click(
         self,
@@ -407,15 +431,15 @@ class SearchController:
         :param category: Specifies link category as Ad or Non-ad
         """
 
-        url = link_element.get_attribute("href") or link_url
+        url = link_element.get_attribute("href") if link_element else link_url
         url = resolve_redirect(url)
 
         adb_controller.open_url(url, self._android_device_id)
 
         click_time = datetime.now().strftime("%H:%M:%S")
 
-        # wait a little before starting random actions
-        sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
+        # Human-like wait before starting random actions
+        self._human_sim.random_page_engagement(min_time=2.0, max_time=3.0)
 
         logger.debug(f"Current url on device: {url}")
 
@@ -436,7 +460,7 @@ class SearchController:
         sleep(wait_time)
 
         adb_controller.close_browser()
-        sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
+        self._human_sim.random_page_engagement(min_time=0.5, max_time=1.0)
 
     def _handle_browser_click(
         self,
@@ -445,11 +469,12 @@ class SearchController:
         is_ad_element: bool,
         original_window_handle: str,
         category: str = "Ad",
+        iframe_src: Optional[str] = None,
     ) -> None:
-        """Handle clicking in the browser
+        """Handle clicking in the browser with human-like behavior
 
         :type link_element: selenium.webdriver.remote.webelement.WebElement
-        :param link_element: Link element
+        :param link_element: Link element (can be None for iframe links)
         :type link_url: str
         :param link_url: Canonical url for the clicked link
         :type is_ad_element: bool
@@ -458,25 +483,57 @@ class SearchController:
         :param original_window_handle: Window handle for the search results tab
         :type category: str
         :param category: Specifies link category as Ad or Non-ad
+        :type iframe_src: str
+        :param iframe_src: If link is inside iframe, the iframe src to switch to
         """
 
-        # For JuicyAds ins/iframe/img elements, try direct click first
-        tag_name = link_element.tag_name.lower()
-        if tag_name in ("ins", "iframe", "img", "div"):
+        # Handle iframe links - need to switch context and re-find element
+        if iframe_src is not None:
             try:
-                # Scroll element into view
-                self._driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", link_element)
-                sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
+                # Find the iframe by src and switch to it
+                iframes = self._driver.find_elements(By.TAG_NAME, "iframe")
+                target_iframe = None
+                for iframe in iframes:
+                    if iframe.get_attribute("src") == iframe_src:
+                        target_iframe = iframe
+                        break
+                
+                if target_iframe is None:
+                    logger.warning(f"Could not find iframe with src: {iframe_src}")
+                    return
 
-                # Try JavaScript click for better reliability with JuicyAds
+                # Human-like scroll to iframe first
+                self._human_sim.human_scroll_to_element(target_iframe)
+                self._human_sim.random_page_engagement(min_time=0.5, max_time=1.0)
+
+                # Switch to iframe context
+                self._driver.switch_to.frame(target_iframe)
+                logger.debug(f"Switched to iframe context: {iframe_src}")
+
+                # Re-find the link element inside the iframe
                 try:
-                    self._driver.execute_script("arguments[0].click();", link_element)
-                except JavascriptException:
-                    link_element.click()
+                    # Find by href
+                    link_element = self._driver.find_element(By.CSS_SELECTOR, f'a[href="{link_url}"]')
+                except NoSuchElementException:
+                    # Try partial match
+                    all_links = self._driver.find_elements(By.TAG_NAME, "a")
+                    for link in all_links:
+                        if link.get_attribute("href") == link_url:
+                            link_element = link
+                            break
+                    else:
+                        logger.warning(f"Could not find link {link_url} inside iframe")
+                        self._driver.switch_to.default_content()
+                        return
 
+                # Now click the link using human simulation
+                self._human_sim.human_click(link_element)
                 click_time = datetime.now().strftime("%H:%M:%S")
 
-                sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
+                # Switch back to default content
+                self._driver.switch_to.default_content()
+
+                self._human_sim.random_page_engagement(min_time=2.0, max_time=3.0)
 
                 # Check if new window/tab opened
                 if len(self._driver.window_handles) > 1:
@@ -484,13 +541,13 @@ class SearchController:
                         if window_handle != original_window_handle:
                             self._driver.switch_to.window(window_handle)
 
-                            sleep(get_random_sleep(2, 3) * config.behavior.wait_factor)
+                            self._human_sim.random_page_engagement(min_time=2.0, max_time=3.0)
                             logger.debug(f"Current url on new tab: {self._driver.current_url}")
 
                             if self._hooks_enabled and category == "Ad":
                                 hooks.after_ad_click_hook(self._driver)
 
-                            self._start_random_action_threads()
+                            self._start_human_action_threads()
 
                             self._update_click_stats(self._driver.current_url, click_time, category)
 
@@ -505,7 +562,69 @@ class SearchController:
                             break
 
                     self._driver.switch_to.window(original_window_handle)
-                    sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
+                    self._human_sim.random_page_engagement(min_time=1.0, max_time=1.5)
+                    return
+                else:
+                    # Click happened but no new tab - log it anyway
+                    self._update_click_stats(link_url, click_time, category)
+                    logger.debug("Click registered but no new tab opened")
+                    return
+
+            except Exception as e:
+                logger.debug(f"Failed to click iframe link: {e}")
+                try:
+                    self._driver.switch_to.default_content()
+                except Exception:
+                    pass
+                return
+
+        # For regular elements (not inside iframe)
+        if link_element is None:
+            logger.warning("No link element to click")
+            return
+
+        tag_name = link_element.tag_name.lower()
+        if tag_name in ("ins", "iframe", "img", "div"):
+            try:
+                # Human-like scroll to element
+                self._human_sim.human_scroll_to_element(link_element)
+                self._human_sim.random_page_engagement(min_time=0.5, max_time=1.0)
+
+                # Perform human-like click with bezier mouse movement
+                self._human_sim.human_click(link_element)
+
+                click_time = datetime.now().strftime("%H:%M:%S")
+
+                self._human_sim.random_page_engagement(min_time=2.0, max_time=3.0)
+
+                # Check if new window/tab opened
+                if len(self._driver.window_handles) > 1:
+                    for window_handle in self._driver.window_handles:
+                        if window_handle != original_window_handle:
+                            self._driver.switch_to.window(window_handle)
+
+                            self._human_sim.random_page_engagement(min_time=2.0, max_time=3.0)
+                            logger.debug(f"Current url on new tab: {self._driver.current_url}")
+
+                            if self._hooks_enabled and category == "Ad":
+                                hooks.after_ad_click_hook(self._driver)
+
+                            self._start_human_action_threads()
+
+                            self._update_click_stats(self._driver.current_url, click_time, category)
+
+                            if config.behavior.request_boost:
+                                boost_requests(self._driver.current_url)
+
+                            wait_time = self._get_wait_time(is_ad_element) * config.behavior.wait_factor
+                            logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
+                            sleep(wait_time)
+
+                            self._driver.close()
+                            break
+
+                    self._driver.switch_to.window(original_window_handle)
+                    self._human_sim.random_page_engagement(min_time=1.0, max_time=1.5)
                     return
                 else:
                     # Click happened but no new tab - log it anyway
@@ -517,12 +636,12 @@ class SearchController:
                 logger.debug(f"Direct click failed on {tag_name}: {e}")
                 # Fall through to standard click handling
 
-        self._open_link_in_new_tab(link_element)
+        self._open_link_in_new_tab_human(link_element)
 
         if len(self._driver.window_handles) != 2:
             logger.debug("Couldn't click! Scrolling element into view...")
-            self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
-            self._open_link_in_new_tab(link_element)
+            self._human_sim.human_scroll_to_element(link_element)
+            self._open_link_in_new_tab_human(link_element)
 
         if len(self._driver.window_handles) != 2:
             logger.debug(f"Failed to open '{link_url}' in a new tab!")
@@ -535,13 +654,13 @@ class SearchController:
                 self._driver.switch_to.window(window_handle)
                 click_time = datetime.now().strftime("%H:%M:%S")
 
-                sleep(get_random_sleep(3, 5) * config.behavior.wait_factor)
+                self._human_sim.random_page_engagement(min_time=3.0, max_time=5.0)
                 logger.debug(f"Current url on new tab: {self._driver.current_url}")
 
                 if self._hooks_enabled and category == "Ad":
                     hooks.after_ad_click_hook(self._driver)
 
-                self._start_random_action_threads()
+                self._start_human_action_threads()
 
                 url = link_url if is_ad_element else self._driver.current_url
 
@@ -559,12 +678,12 @@ class SearchController:
 
         # go back to the original window
         self._driver.switch_to.window(original_window_handle)
-        sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
+        self._human_sim.random_page_engagement(min_time=1.0, max_time=1.5)
 
-    def _open_link_in_new_tab(
+    def _open_link_in_new_tab_human(
         self, link_element: selenium.webdriver.remote.webelement.WebElement
     ) -> None:
-        """Open the link in a new browser tab
+        """Open the link in a new browser tab with human-like mouse movement
 
         :type link_element: selenium.webdriver.remote.webelement.WebElement
         :param link_element: Link element
@@ -574,14 +693,25 @@ class SearchController:
         control_command_key = Keys.COMMAND if platform.endswith("darwin") else Keys.CONTROL
 
         try:
+            # Use human-like mouse movement to the element
+            self._human_sim.move_to_element_human(link_element)
+
+            # Add micro-movements before clicking
+            self._human_sim.add_micro_movements(num_movements=random.randint(2, 4))
+
             actions = ActionChains(self._driver)
-            actions.move_to_element(link_element)
             actions.key_down(control_command_key)
-            actions.click()
+
+            # Human-like click with variable duration
+            click_duration = random.uniform(0.05, 0.15)
+            actions.click_and_hold()
+            actions.pause(click_duration)
+            actions.release()
+
             actions.key_up(control_command_key)
             actions.perform()
 
-            sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
+            self._human_sim.random_page_engagement(min_time=0.5, max_time=1.0)
 
         except JavascriptException as exp:
             error_message = str(exp).split("\n")[0]
@@ -591,6 +721,16 @@ class SearchController:
                     f"Failed to click element[{link_element.get_attribute('outerHTML')}]! "
                     "Skipping..."
                 )
+
+    def _open_link_in_new_tab(
+        self, link_element: selenium.webdriver.remote.webelement.WebElement
+    ) -> None:
+        """Open the link in a new browser tab (legacy method, calls human version)
+
+        :type link_element: selenium.webdriver.remote.webelement.WebElement
+        :param link_element: Link element
+        """
+        self._open_link_in_new_tab_human(link_element)
 
     def _get_wait_time(self, is_ad_element: bool) -> int:
         """Get wait time based on whether the link is an ad or non-ad
@@ -636,18 +776,57 @@ class SearchController:
         )
 
     def _start_random_action_threads(self) -> None:
-        """Start threads for random actions on browser"""
+        """Start threads for random actions on browser (legacy, calls human version)"""
+        self._start_human_action_threads()
 
-        random_scroll_thread = Thread(target=self._make_random_scrolls)
+    def _start_human_action_threads(self) -> None:
+        """Start threads for human-like random actions on browser"""
+
+        random_scroll_thread = Thread(target=self._make_human_scrolls)
         random_scroll_thread.start()
-        random_mouse_thread = Thread(target=self._make_random_mouse_movements)
+        random_mouse_thread = Thread(target=self._make_human_mouse_movements)
         random_mouse_thread.start()
-        random_scroll_thread.join(
-            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
-        )
-        random_mouse_thread.join(
-            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
-        )
+
+        # Also do random viewport interactions
+        random_viewport_thread = Thread(target=self._random_viewport_interactions)
+        random_viewport_thread.start()
+
+        timeout = float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
+        random_scroll_thread.join(timeout=timeout)
+        random_mouse_thread.join(timeout=timeout)
+        random_viewport_thread.join(timeout=timeout)
+
+    def _random_viewport_interactions(self) -> None:
+        """Perform random viewport interactions like hovering over non-target elements"""
+
+        logger.debug("Performing random viewport interactions...")
+
+        try:
+            # Find some non-ad elements to hover over
+            all_elements = self._driver.find_elements(By.CSS_SELECTOR, "p, h1, h2, h3, span, div")
+
+            if all_elements:
+                # Pick 1-3 random elements to hover over
+                num_hovers = random.randint(1, min(3, len(all_elements)))
+                hover_elements = random.sample(all_elements, num_hovers)
+
+                for element in hover_elements:
+                    try:
+                        if element.is_displayed():
+                            # Move to element with human-like movement
+                            self._human_sim.move_to_element_human(element)
+
+                            # Pause as if reading
+                            sleep(random.uniform(0.3, 1.5))
+
+                            # Maybe add some micro-movements
+                            if random.random() < 0.3:
+                                self._human_sim.add_micro_movements(num_movements=random.randint(1, 3))
+                    except (StaleElementReferenceException, ElementNotInteractableException):
+                        continue
+
+        except Exception as e:
+            logger.debug(f"Random viewport interaction error: {e}")
 
     def end_search(self) -> None:
         """Close the browser.
@@ -706,11 +885,12 @@ class SearchController:
             if "not connected to DevTools" in str(exp):
                 logger.debug("Incognito mode is active. No need to delete cache. Skipping...")
 
-    def _make_random_scrolls(self) -> None:
-        """Make random scrolls on page"""
+    def _make_human_scrolls(self) -> None:
+        """Make human-like scrolls on page with variable speeds and natural patterns"""
 
-        logger.debug("Making random scrolls...")
+        logger.debug("Making human-like scrolls...")
 
+        # Use human simulation for natural scrolling
         directions = [Direction.DOWN]
         directions += random.choices(
             [Direction.UP] * 5 + [Direction.DOWN] * 5, k=random.choice(range(1, 5))
@@ -720,13 +900,23 @@ class SearchController:
 
         for direction in directions:
             if direction == Direction.DOWN and not self._is_scroll_at_the_end():
-                self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
+                # Human-like scroll down with variable distance
+                scroll_amount = random.randint(150, 400)
+                self._human_sim.human_scroll(scroll_amount)
             elif direction == Direction.UP:
-                self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+                # Human-like scroll up
+                scroll_amount = random.randint(-300, -100)
+                self._human_sim.human_scroll(scroll_amount)
 
-            sleep(get_random_sleep(1, 3) * config.behavior.wait_factor)
+            # Variable pause between scrolls
+            self._human_sim.random_page_engagement(min_time=0.8, max_time=2.5)
 
-        self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
+        # Scroll back to top with human-like behavior
+        self._driver.execute_script("window.scrollTo({top: 0, behavior: 'smooth'});")
+
+    def _make_random_scrolls(self) -> None:
+        """Make random scrolls on page (legacy, calls human version)"""
+        self._make_human_scrolls()
 
     def _make_random_swipes(self) -> None:
         """Make random swipes on page"""
@@ -747,7 +937,7 @@ class SearchController:
             elif direction == Direction.UP:
                 self._send_swipe(direction=Direction.UP)
 
-            sleep(get_random_sleep(1, 2) * config.behavior.wait_factor)
+            self._human_sim.random_page_engagement(min_time=1.0, max_time=2.0)
 
         HOME_KEYCODE = 122
         adb_controller.send_keyevent(HOME_KEYCODE)  # go to top by sending Home key
@@ -778,74 +968,48 @@ class SearchController:
             duration=duration,
         )
 
-    def _make_random_mouse_movements(self) -> None:
-        """Make random mouse movements"""
+    def _make_human_mouse_movements(self) -> None:
+        """Make human-like mouse movements using bezier curves and micro-movements"""
 
         if self._random_mouse_enabled:
             try:
-                import pyautogui
+                logger.debug("Making human-like mouse movements...")
 
-                logger.debug("Making random mouse movements...")
+                # Get viewport dimensions
+                viewport_width = self._driver.execute_script("return window.innerWidth;")
+                viewport_height = self._driver.execute_script("return window.innerHeight;")
 
-                screen_width, screen_height = pyautogui.size()
-                pyautogui.moveTo(screen_width / 2 - 300, screen_height / 2 - 200)
+                # Perform several random movements across the viewport
+                num_movements = random.randint(3, 7)
 
-                logger.debug(pyautogui.position())
+                for i in range(num_movements):
+                    # Random target position within viewport
+                    target_x = random.randint(100, viewport_width - 100)
+                    target_y = random.randint(100, viewport_height - 100)
 
-                ease_methods = [
-                    pyautogui.easeInQuad,
-                    pyautogui.easeOutQuad,
-                    pyautogui.easeInOutQuad,
-                ]
+                    # Move with bezier curve
+                    self._human_sim.bezier_mouse_move(target_x, target_y)
 
-                logger.debug("Going LEFT and DOWN...")
+                    # Add micro-movements at rest position
+                    if random.random() < 0.4:
+                        self._human_sim.add_micro_movements(num_movements=random.randint(2, 5))
 
-                pyautogui.move(
-                    -random.choice(range(200, 300)),
-                    random.choice(range(250, 450)),
-                    1,
-                    random.choice(ease_methods),
-                )
+                    # Random pause as if looking at content
+                    sleep(random.uniform(0.3, 1.2))
 
-                logger.debug(pyautogui.position())
+                    # Occasionally do a small scroll while moving
+                    if random.random() < 0.3:
+                        scroll_amount = random.randint(-100, 100)
+                        self._human_sim.human_scroll(scroll_amount)
 
-                for _ in range(1, random.choice(range(3, 7))):
-                    direction = random.choice(list(Direction))
-                    ease_method = random.choice(ease_methods)
+                logger.debug("Human-like mouse movements completed")
 
-                    logger.debug(f"Going {direction.value}...")
+            except Exception as e:
+                logger.debug(f"Mouse movement error: {e}")
 
-                    if direction == Direction.LEFT:
-                        pyautogui.move(-(random.choice(range(100, 200))), 0, 0.5, ease_method)
-
-                    elif direction == Direction.RIGHT:
-                        pyautogui.move(random.choice(range(200, 400)), 0, 0.3, ease_method)
-
-                    elif direction == Direction.UP:
-                        pyautogui.move(0, -(random.choice(range(100, 200))), 1, ease_method)
-                        pyautogui.scroll(random.choice(range(1, 7)))
-
-                    elif direction == Direction.DOWN:
-                        pyautogui.move(0, random.choice(range(150, 300)), 0.7, ease_method)
-                        pyautogui.scroll(-random.choice(range(1, 7)))
-
-                    else:
-                        pyautogui.move(
-                            random.choice(range(100, 200)),
-                            random.choice(range(150, 250)),
-                            1,
-                            ease_method,
-                        )
-
-                    logger.debug(pyautogui.position())
-
-            except pyautogui.FailSafeException:
-                logger.debug("The mouse cursor was moved to one of the screen corners!")
-
-                pyautogui.FAILSAFE = False
-
-                logger.debug("Moving cursor to center...")
-                pyautogui.moveTo(screen_width / 2, screen_height / 2)
+    def _make_random_mouse_movements(self) -> None:
+        """Make random mouse movements (legacy, calls human version)"""
+        self._make_human_mouse_movements()
 
     def set_browser_id(self, browser_id: Optional[int] = None) -> None:
         """Set browser id in stats if multiple browsers are used

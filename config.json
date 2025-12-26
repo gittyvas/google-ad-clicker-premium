@@ -8,7 +8,7 @@
     "webdriver": {
         "proxy": "",
         "auth": true,
-        "incognito": false,
+        "incognito": true,
         "country_domain": false,
         "language_from_proxy": true,
         "ss_on_exception": false,
